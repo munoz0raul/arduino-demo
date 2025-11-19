@@ -168,4 +168,3 @@ Make sure your sketch contains:
 
 - A valid Zephyr-based Arduino project
 - Board set to `arduino:zephyr:unoq`
-

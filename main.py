@@ -4,7 +4,7 @@ from arduino.app_utils import *
 from arduino.app_bricks.keyword_spotting import KeywordSpotting
 
 def on_keyword_detected():
-    """Executa a ação esperada quando a 'palavra' é detectada ou simulada."""
+    """Executes the expected action when the keyword is detected or simulated."""
     print("[debug] on_keyword_detected() called")
     try:
         Bridge.call("keyword_detected")
@@ -13,15 +13,14 @@ def on_keyword_detected():
         print(f"[error] Bridge.call failed: {e}", file=sys.stderr)
 
 def main():
-    print("Enviando 'keyword_detected' automaticamente a cada 10 segundos...")
+    print("Sending 'keyword_detected' automatically every 10 seconds...")
     try:
         while True:
             print(f"[{time.strftime('%H:%M:%S')}] Trigger...")
             on_keyword_detected()
             time.sleep(10)
     except KeyboardInterrupt:
-        print("Encerrando...")
+        print("Exiting...")
 
 if __name__ == '__main__':
     main()
-

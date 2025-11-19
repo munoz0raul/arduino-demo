@@ -45,4 +45,3 @@ COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 WORKDIR /app
 CMD ["python", "/app/main.py"]
-
