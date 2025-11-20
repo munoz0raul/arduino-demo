@@ -1,5 +1,7 @@
 # Arduino LED Toggle – Simple LED Control Demo
 
+**📖 [Read the full blog post: Building a Web-Controlled LED System with Arduino Uno R4](./BLOG.md)**
+
 This project demonstrates **basic LED control on the Arduino Uno R4**. It's a minimal example showing how to toggle the built-in LED on and off using Python-Arduino bridge communication.
 
 This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno R4 (STM32U5)** board.
