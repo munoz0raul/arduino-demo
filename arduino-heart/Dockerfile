@@ -32,7 +32,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 RUN mkdir -p /app/
 COPY openocd /opt/openocd
 COPY main.py start.sh /app/
-COPY sketch.yaml sketch.ino heart_frames.h /app/sketch/
+COPY sketch.yaml sketch.ino frames.h /app/sketch/
 RUN chmod +x /app/start.sh
 WORKDIR /app
 

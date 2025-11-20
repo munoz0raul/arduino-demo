@@ -1,170 +1,95 @@
-# Arduino Uno R4 Q – Dockerized Compiler & Flasher
+# Arduino Uno R4 Demo Projects
 
-This repository provides a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno R4 (STM32U5)** board.
+This repository contains demonstration projects for the **Arduino Uno R4** board, showcasing LED matrix display capabilities using Dockerized development environments.
 
-It includes:
+## 📁 Projects
 
-- **arduino-cli**
-- **Arduino Zephyr Core (`arduino:zephyr`)**
-- **OpenOCD with Arduino-specific configuration** (`/opt/openocd`)
-- A generic **build + flash script** (`start.sh`)
-- **Python environment** with Arduino app utilities
-- Support for flashing via **linuxgpiod SWD** (Uno R4 uses SWD pins internally)
+### 🫀 [arduino-heart](./arduino-heart)
+A heart animation demo that displays a static heart on the LED matrix and triggers a beating animation when receiving `keyword_detected` events. This project demonstrates event-driven animations and Python-Arduino bridge communication.
 
-This allows you to compile, flash sketches, and run Python applications **from any machine** without installing the Arduino IDE, Zephyr SDK, or OpenOCD locally.
+**Features:**
+- Static heart display on startup
+- 8-frame beating heart animation
+- Automatic triggering via Python application (every 10 seconds)
+- Can be adapted for real keyword detection from audio input
 
----
+### 🎨 [arduino-matrix](./arduino-matrix)
+An interactive LED matrix display controller with a menu-driven interface for displaying various images and animations.
 
-## 🚀 Features
+**Features:**
+- 30+ different images across multiple categories:
+  - Hearts (9 variations)
+  - Microphones (4 variations)
+  - Signals (10 variations)
+  - Logos (Foundries & Arduino)
+- Built-in animations (Signal and Microphone sequences)
+- Interactive Python menu for real-time control
+- Display management (clear, start/stop animations)
 
-- Generic Docker container — works with **any sketch**
-- Automatically:
-  1. Compiles the sketch with `arduino-cli`
-  2. Locates the generated `.elf-zsk.bin`
-  3. Flashes to the STM32U5 using OpenOCD (`arduino-flash.sh`)
-  4. Runs a Python application to interact with the board
-- Isolated environment with reproducible builds
-- Compatible with Uno R4 Minima and Uno R4 WiFi (same MCU)
+## 🚀 Technology Stack
 
----
+Both projects use:
+- **Arduino Uno R4** (STM32U5 MCU)
+- **Zephyr RTOS** via Arduino Zephyr Core
+- **Docker** for isolated build environments
+- **OpenOCD** for flashing via SWD
+- **Python** for host-side applications
+- **Arduino Bridge** for Python-Arduino communication
 
-## 📦 Requirements
+## 🧱 Getting Started
 
-- Docker
-- Access to the board's GPIO chip devices (required for SWD)
-- Linux host (Windows/macOS not compatible with gpiod flashing)
+Each project is self-contained with its own:
+- `Dockerfile` - Complete development environment
+- `docker-compose.yml` - Easy container management
+- `sketch.ino` - Arduino sketch for the board
+- `main.py` - Python application for interaction
+- `README.md` - Detailed setup and usage instructions
 
----
+### Prerequisites
+- Docker installed
+- Linux host (required for GPIO-based SWD flashing)
+- Access to GPIO chip devices (`/dev/gpiochip0`, `/dev/gpiochip1`, `/dev/gpiochip2`)
 
-## 🧱 Building the Docker Image
+### Quick Start
+Navigate to any project directory and run:
 
-```sh
-docker build -t arduino-heart .
+```bash
+# Build the Docker image
+docker build -t <project-name> .
+
+# Run with Docker Compose
+docker compose up
 ```
 
----
+Or use Docker directly:
 
-## ▶️ Running the Container
-
-### Using Docker Run
-
-Run the container with the necessary GPIO devices and socket mount:
-
-```sh
+```bash
 docker run -it --privileged \
     --device /dev/gpiochip0 \
     --device /dev/gpiochip1 \
     --device /dev/gpiochip2 \
     -v /var/run/arduino-router.sock:/var/run/arduino-router.sock \
-    arduino-heart
+    <project-name>
 ```
 
-### Using Docker Compose
+## 📖 Documentation
 
-Alternatively, use docker-compose for easier management:
+For detailed information about each project, including:
+- Build instructions
+- Configuration options
+- Code explanations
+- Usage examples
 
-```sh
-docker compose up
-```
+Please refer to the individual README.md files in each project directory.
 
-The container will:
+## 🎯 Purpose
 
-1. Compile the sketch in `/app/sketch`:
+These projects serve as:
+- **Learning resources** for Arduino Uno R4 LED matrix programming
+- **Templates** for Dockerized Arduino development
+- **Examples** of Python-Arduino bridge communication
+- **Test cases** for Arduino Uno R4 capabilities
 
-```sh
-arduino-cli compile -b arduino:zephyr:unoq --output-dir /app/sketch /app/sketch
-```
+## 📝 License
 
-2. Flash it to the board:
-
-```sh
-/opt/openocd/bin/arduino-flash.sh sketch.ino.elf-zsk.bin
-```
-
-3. Run the Python application:
-
-```sh
-python /app/main.py
-```
-
-The Python app sends a `keyword_detected` event automatically every 10 seconds via the Arduino Bridge.
-
----
-
-## 🗂 Repository Structure
-
-```
-.
-├── Dockerfile
-├── start.sh
-├── main.py
-├── sketch.ino
-├── sketch.yaml
-├── heart_frames.h
-├── openocd/
-│   ├── bin/openocd
-│   ├── bin/arduino-flash.sh
-│   ├── openocd_gpiod.cfg
-│   └── additional stm32 configs...
-├── arduino.asc
-├── arduino.conf
-└── arduino.list
-```
-
-### `/opt/openocd`
-
-The container includes Arduino’s custom OpenOCD bundle that supports:
-
-- linuxgpiod SWD backend
-- STM32U5 flashing
-- arduino-flash.sh wrapper script
-- Arduino’s board-specific config files
-
-This is the same mechanism used by the **Arduino IDE** and **arduino-cli**.
-
----
-
-## ⚙️ start.sh (Automatic Compiler + Flasher + Python App)
-
-The container runs this script by default:
-
-```bash
-#!/bin/bash
-set -e
-
-SKETCH_DIR="/app/sketch"
-
-echo ">>> Compiling sketch..."
-arduino-cli compile -b arduino:zephyr:unoq --output-dir "$SKETCH_DIR" "$SKETCH_DIR"
-
-echo ">>> Flashing..."
-BIN_FILE=$(ls "$SKETCH_DIR"/*.elf-zsk.bin | head -n 1)
-if [ -z "$BIN_FILE" ]; then
-    echo "ERROR: No .elf-zsk.bin found"
-    exit 1
-fi
-
-/opt/openocd/bin/arduino-flash.sh "$BIN_FILE"
-
-echo ">>> Activating virtualenv"
-source /opt/venv/bin/activate
-
-echo ">>> Running Python App..."
-python /app/main.py
-```
-
----
-
-## 🛠 Troubleshooting
-
-### OpenOCD cannot access GPIO
-Make sure you passed the `--device /dev/gpiochip*` arguments.
-
-### Permission denied on gpiochip
-Run as root or adjust udev rules.
-
-### Sketch fails to compile
-Make sure your sketch contains:
-
-- A valid Zephyr-based Arduino project
-- Board set to `arduino:zephyr:unoq`
+Check individual project directories for license information.
