@@ -19,29 +19,21 @@ RUN apt-get update && \
         libgpiod3 bash git curl && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-
-
 RUN arduino-cli core install arduino:zephyr -v
 
 ENV VENV=/opt/venv
 RUN python3 -m venv $VENV
 ENV PATH="$VENV/bin:$PATH"
 
-RUN pip install --upgrade pip setuptools wheel
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install https://github.com/arduino/app-bricks-py/releases/download/release%2F0.5.0/arduino_app_bricks-0.5.0-py3-none-any.whl && \
+    pip install numpy watchdog pyalsaaudio
 
-RUN pip install git+https://github.com/arduino/app-bricks-py.git
-RUN pip install arduino_iot_cloud
-RUN pip install numpy watchdog pyalsaaudio
-
+RUN mkdir -p /app/
 COPY openocd /opt/openocd
-
-RUN mkdir -p /app/sketch/
-COPY sketch.ino /app/sketch/
-COPY sketch.yaml /app/sketch/
-COPY heart_frames.h /app/sketch/
-COPY main.py /app/
-
-COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+COPY main.py start.sh /app/
+COPY sketch.yaml sketch.ino heart_frames.h /app/sketch/
+RUN chmod +x /app/start.sh
 WORKDIR /app
-CMD ["python", "/app/main.py"]
+
+CMD ["/app/start.sh"]
