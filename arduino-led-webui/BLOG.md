@@ -6,6 +6,24 @@ The [Arduino Uno R4 WiFi](https://docs.arduino.cc/hardware/uno-q/) is a unique b
 
 In this tutorial, we'll build a **web-based LED controller** that demonstrates inter-core communication. The MPU will run a Flask web server accessible from any browser, while the MCU will control the physical LEDs. We'll use [Arduino App Bricks](https://docs.arduino.cc/software/app-lab/tutorials/bricks/) to enable seamless communication between the two cores via the **Arduino Bridge**.
 
+## 🎥 Demo Video
+
+Watch the project in action:
+
+[![Arduino LED Web Controller Demo](https://img.shields.io/badge/▶️-Watch%20Demo-red?style=for-the-badge)](https://photos.app.goo.gl/cVVhZjy9v6azrm4y6)
+
+**[Click here to see the video demonstration](https://photos.app.goo.gl/cVVhZjy9v6azrm4y6)**
+
+The video shows:
+- Web interface with LED control buttons
+- Real-time LED toggling on the Arduino board
+- Blink animations with start/stop controls
+- Server-Sent Events updating status in real-time
+
+---
+
+## Architecture Overview
+
 ![Architecture Diagram]
 ```
 ┌─────────────────────┐         ┌──────────────────────┐
