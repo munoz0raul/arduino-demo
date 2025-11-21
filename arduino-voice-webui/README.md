@@ -54,7 +54,7 @@ This allows you to run voice recognition **directly on the Arduino Uno R4's Linu
 ## 🧱 Building the Docker Image
 
 ```sh
-docker build -t arduino-voice .
+docker build -t arduino-voice-webui .
 ```
 
 ---
@@ -69,7 +69,7 @@ Run the container with audio device access:
 docker run -it --rm \
     --device /dev/snd \
     -p 5000:5000 \
-    arduino-voice
+    arduino-voice-webui
 ```
 
 ### Using Docker Compose
@@ -176,7 +176,7 @@ docker run -it --rm \
     --device /dev/snd \
     -p 5000:5000 \
     -v /path/to/your-model.eim:/app/deployment.eim \
-    arduino-voice
+    arduino-voice-webui
 ```
 
 Or mount via the assets directory:
@@ -187,7 +187,7 @@ docker run -it --rm \
     -p 5000:5000 \
     -v /path/to/models:/var/local/assets \
     -e MODEL_NAME=your-model.eim \
-    arduino-voice
+    arduino-voice-webui
 ```
 
 ### Adding New Colors
