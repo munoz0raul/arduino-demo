@@ -75,9 +75,8 @@
         .tree-wrap{display:flex;justify-content:center;align-items:center;position:relative;min-height:500px;padding:20px}
         .aura{position:absolute;inset:-80px;z-index:0;filter:blur(60px);opacity:.22;pointer-events:none;transition:background .35s ease, opacity .35s ease;background:radial-gradient(600px 300px at 50% 40%, transparent 0%, transparent 50%)}
         .tree-container{position:relative;z-index:1;display:flex;justify-content:center;align-items:center}
-        .tree-image{max-width:100%;max-height:500px;width:auto;height:auto;object-fit:contain;transition:transform .4s ease, filter .4s ease, opacity .3s ease;filter:drop-shadow(0 20px 40px rgba(0,0,0,.4))}
-        .tree-image.active{transform:scale(1.05);filter:drop-shadow(0 30px 60px rgba(0,0,0,.6)) saturate(1.2) brightness(1.1);animation:treeGlow 2s ease-in-out infinite}
-        @keyframes treeGlow{0%{transform:scale(1.05)}50%{transform:scale(1.08)}100%{transform:scale(1.05)}}
+        .tree-image{max-width:100%;max-height:500px;width:auto;height:auto;object-fit:contain;transition:filter .4s ease, opacity .3s ease;filter:drop-shadow(0 20px 40px rgba(0,0,0,.4))}
+        .tree-image.active{filter:drop-shadow(0 30px 60px rgba(0,0,0,.6)) saturate(1.2) brightness(1.1)}
         .tips{margin-top:10px;text-align:center;font-size:18px;color:#020b3f;opacity:.95}
 
         /* Bottom white footer bar */
