@@ -1,4 +1,4 @@
-FROM debian:trixie
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
