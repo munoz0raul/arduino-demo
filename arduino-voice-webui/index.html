@@ -163,6 +163,15 @@
         red:'#ff5c6c', yellow:'#ffd166'
       };
 
+      // Preload all tree images to prevent loading delays when switching
+      const imageCache = {};
+      const imagesToPreload = ['off.png', 'blue.png', 'green.png', 'purple.png', 'red.png', 'yellow.png'];
+      imagesToPreload.forEach(src => {
+        const img = new Image();
+        img.src = src;
+        imageCache[src] = img;
+      });
+
       function setListeningUI(isListening){
         chipEl.style.display = isListening ? 'inline-flex' : 'none';
         chipLeftEl.style.display = isListening ? 'inline-flex' : 'none';

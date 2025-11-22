@@ -1,10 +1,10 @@
 # Arduino LED Matrix Display Controller
 
-**📖 [Read the full blog post: Interactive LED Matrix Drawing with Arduino Uno R4](./BLOG.md)**
+**📖 [Read the full blog post: Interactive LED Matrix Drawing with Arduino Uno Q](./BLOG.md)**
 
-This project provides an **interactive LED matrix display controller** for the Arduino Uno R4. Through a Python-based menu interface, you can display various images and animations on the board's built-in LED matrix, including hearts, microphones, signal indicators, and logos.
+This project provides an **interactive LED matrix display controller** for the Arduino Uno Q. Through a Python-based menu interface, you can display various images and animations on the board's built-in LED matrix, including hearts, microphones, signal indicators, and logos.
 
-This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno R4 (STM32U5)** board.
+This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno Q (STM32U5)** board.
 
 It includes:
 
@@ -36,7 +36,7 @@ This allows you to compile, flash sketches, and run Python applications **from a
   - Flashing to STM32U5 using OpenOCD
   - Python-Arduino bridge communication
 - Isolated environment with reproducible builds
-- Compatible with Uno R4 Minima and Uno R4 WiFi (same MCU)
+- Compatible with Uno Q Minima and Uno Q WiFi (same MCU)
 
 ---
 

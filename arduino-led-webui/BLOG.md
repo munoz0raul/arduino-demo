@@ -1,8 +1,8 @@
-# Building a Web-Controlled LED System with Arduino Uno R4: MPU-MCU Communication
+# Building a Web-Controlled LED System with Arduino Uno Q: MPU-MCU Communication
 
 ## Introduction
 
-The [Arduino Uno R4 WiFi](https://docs.arduino.cc/hardware/uno-q/) is a unique board that features **two processing cores**: a **Microprocessor (MPU)** running Linux and a **Microcontroller (MCU)** for real-time hardware control. This dual-core architecture opens up powerful possibilities for IoT applications, allowing you to combine the flexibility of Linux with the precision of bare-metal firmware.
+The [Arduino Uno Q](https://docs.arduino.cc/hardware/uno-q/) is a unique board that features **two processing cores**: a **Microprocessor (MPU)** running Linux and a **Microcontroller (MCU)** for real-time hardware control. This dual-core architecture opens up powerful possibilities for IoT applications, allowing you to combine the flexibility of Linux with the precision of bare-metal firmware.
 
 In this tutorial, we'll build a **web-based LED controller** that demonstrates inter-core communication. The MPU will run a Flask web server accessible from any browser, while the MCU will control the physical LEDs. We'll use [Arduino App Bricks](https://docs.arduino.cc/software/app-lab/tutorials/bricks/) to enable seamless communication between the two cores via the **Arduino Bridge**.
 
@@ -46,11 +46,11 @@ The video shows:
 
 ---
 
-## Understanding the Arduino Uno R4 Architecture
+## Understanding the Arduino Uno Q Architecture
 
 ### Dual-Core Design
 
-The Arduino Uno R4 WiFi contains:
+The Arduino Uno Q contains:
 
 1. **MPU (Microprocessor)** - Runs a full Linux system
    - Handles networking, file I/O, and complex applications
@@ -92,19 +92,73 @@ We'll build a complete system with:
 Let's start by examining the `Dockerfile`, which sets up our complete development environment:
 
 ```dockerfile
-FROM debian:trixie
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Arduino CLI and dependencies
+COPY arduino.asc /etc/apt/keyrings/arduino.asc
+COPY arduino.conf /etc/apt/auth.conf.d/arduino.conf
+COPY arduino.list /etc/apt/sources.list.d/arduino.list
+
+RUN chmod 644 /etc/apt/keyrings/arduino.asc && \
+    chmod 600 /etc/apt/auth.conf.d/arduino.conf
+
+RUN apt-get update && \
+    apt-get install -y apt-transport-https ca-certificates
+
 RUN apt-get update && \
     apt-get install -y \
         arduino-cli python3 python3-venv python3-dev python3-pip \
         build-essential gcc \
         libasound2 libasound2-dev \
-        libgpiod3 bash git curl
+        libgpiod3 bash git curl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 ```
 
-### What's Being Installed?
+### Base Image
+
+We use **`debian:trixie-slim`** as our base image:
+- Smaller footprint (~70-80MB vs ~120MB for full Debian)
+- Contains only essential packages
+- Perfect for containerized applications
+
+### Arduino CLI Repository Setup
+
+Before installing `arduino-cli`, we configure the Arduino package repository:
+
+```dockerfile
+COPY arduino.asc /etc/apt/keyrings/arduino.asc
+COPY arduino.conf /etc/apt/auth.conf.d/arduino.conf
+COPY arduino.list /etc/apt/sources.list.d/arduino.list
+
+RUN chmod 644 /etc/apt/keyrings/arduino.asc && \
+    chmod 600 /etc/apt/auth.conf.d/arduino.conf
+```
+
+These files provide:
+- **`arduino.asc`**: GPG key for package verification
+- **`arduino.conf`**: Authentication configuration
+- **`arduino.list`**: Package repository source list
+
+### Installing Dependencies
+
+```dockerfile
+RUN apt-get update && \
+    apt-get install -y apt-transport-https ca-certificates
+```
+
+First, we install HTTPS transport support for secure package downloads.
+
+```dockerfile
+RUN apt-get update && \
+    apt-get install -y \
+        arduino-cli python3 python3-venv python3-dev python3-pip \
+        build-essential gcc \
+        libasound2 libasound2-dev \
+        libgpiod3 bash git curl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+**What's Being Installed:**
 
 1. **`arduino-cli`** - Command-line tool to compile Arduino sketches
    - Provides the build toolchain for Zephyr RTOS
@@ -114,10 +168,18 @@ RUN apt-get update && \
 2. **Python environment** - For the MPU application
    - `python3-venv` - Virtual environment isolation
    - `python3-pip` - Package management
+   - `python3-dev` - Development headers for native extensions
 
 3. **Build tools** - Compilers and libraries
    - `gcc`, `build-essential` - C/C++ compilation
    - `libgpiod3` - GPIO access for flashing
+   - `libasound2`, `libasound2-dev` - Audio libraries (required by some dependencies)
+
+4. **Utilities**
+   - `bash`, `git`, `curl` - Shell and download tools
+   - `apt-transport-https`, `ca-certificates` - Secure package downloads
+
+**Note:** The final `apt-get clean && rm -rf /var/lib/apt/lists/*` reduces image size by removing package cache.
 
 ### Installing the Arduino Core
 
@@ -162,15 +224,25 @@ COPY openocd /opt/openocd
 ### Copying Application Files
 
 ```dockerfile
+RUN mkdir -p /app/
+COPY openocd /opt/openocd
 COPY main.py start.sh index.html /app/
 COPY sketch.yaml sketch.ino /app/sketch/
+RUN chmod +x /app/start.sh
+WORKDIR /app
+
+CMD ["/app/start.sh"]
 ```
 
 This copies:
-- **`sketch.ino`** - MCU firmware (runs on STM32U5)
-- **`main.py`** - MPU application (Flask server)
-- **`index.html`** - Web interface
-- **`start.sh`** - Build and run script
+- **`openocd/`** - Custom OpenOCD bundle to `/opt/openocd` for flashing
+- **`main.py`** - MPU application (Flask server) to `/app/`
+- **`start.sh`** - Build and run script to `/app/`
+- **`index.html`** - Web interface to `/app/`
+- **`sketch.ino`** - MCU firmware (runs on STM32U5) to `/app/sketch/`
+- **`sketch.yaml`** - Sketch configuration to `/app/sketch/`
+
+The container starts in `/app` and automatically runs `/app/start.sh` on startup.
 
 ---
 
@@ -189,7 +261,15 @@ arduino-cli compile -b arduino:zephyr:unoq --output-dir "$SKETCH_DIR" "$SKETCH_D
 
 echo ">>> Flashing..."
 BIN_FILE=$(ls "$SKETCH_DIR"/*.elf-zsk.bin | head -n 1)
+if [ -z "$BIN_FILE" ]; then
+    echo "ERROR: No .elf-zsk.bin found"
+    exit 1
+fi
+
 /opt/openocd/bin/arduino-flash.sh "$BIN_FILE"
+
+echo ">>> Activating virtualenv"
+source /opt/venv/bin/activate
 
 echo ">>> Running Python App..."
 python /app/main.py
@@ -203,7 +283,7 @@ arduino-cli compile -b arduino:zephyr:unoq --output-dir "$SKETCH_DIR" "$SKETCH_D
 
 **What happens here:**
 
-1. **Target board**: `arduino:zephyr:unoq` (Arduino Uno R4 with Zephyr)
+1. **Target board**: `arduino:zephyr:unoq` (Arduino Uno Q with Zephyr)
 2. **Input**: `sketch.ino` and `sketch.yaml` in `/app/sketch/`
 3. **Output**: `sketch.ino.elf-zsk.bin` (compiled firmware)
 
@@ -226,7 +306,7 @@ The compilation process:
 3. Writes the new binary to flash memory
 4. Resets the MCU to start execution
 
-**Why this works:** The Arduino Uno R4's MPU has direct access to the MCU's debug interface, allowing seamless firmware updates without external programmers.
+**Why this works:** The Arduino Uno Q's MPU has direct access to the MCU's debug interface, allowing seamless firmware updates without external programmers.
 
 ### Step 3: Running the Python Application
 
@@ -353,7 +433,7 @@ void loop() {
 - Handles animations without freezing the system
 - Allows the MCU to respond to Bridge calls while animating
 
-**Note:** LEDs on the Arduino Uno R4 are **active-LOW**, meaning:
+**Note:** LEDs on the Arduino Uno Q are **active-LOW**, meaning:
 - `digitalWrite(pin, LOW)` → LED **ON**
 - `digitalWrite(pin, HIGH)` → LED **OFF**
 
@@ -426,11 +506,18 @@ def start_blink(led):
         blink_states[led] = True
         
         # Update status
-        status_msg = f"{led.upper()}: Blinking"
+        status_msg = f"{led.upper()} blink STARTED"
         WebStatus.update_status(status_msg)
         
-        return jsonify({'success': True, 'led': led})
+        print(f"[BLINK] Started {led}")
+        
+        return jsonify({
+            'success': True,
+            'led': led,
+            'blinking': True
+        })
     except Exception as e:
+        print(f"[ERROR] Start blink {led}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 ```
 
@@ -499,19 +586,54 @@ The web interface provides a clean, modern UI for LED control.
 
 ```javascript
 async function toggleLED(led) {
-    const response = await fetch(`/toggle/${led}`, {
-        method: 'POST'
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-        const button = document.getElementById(`btn-${led}`);
-        if (data.state) {
-            button.classList.add('active');
-        } else {
-            button.classList.remove('active');
+    try {
+        const response = await fetch(`/toggle/${led}`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            ledStates[led] = data.state;
+            const btn = document.getElementById(`btn-${led.replace('_', '-')}`);
+            if (data.state) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+            updateStatus(`${led.toUpperCase()}: ${data.state ? 'ON' : 'OFF'}`);
         }
+    } catch (error) {
+        console.error('Error toggling LED:', error);
+        updateStatus('Error: Could not toggle LED');
+    }
+}
+```
+
+### JavaScript: Toggle Blink
+
+```javascript
+async function toggleBlink(led) {
+    try {
+        const isBlinking = blinkStates[led];
+        const endpoint = isBlinking ? 'stop_blink' : 'start_blink';
+        
+        const response = await fetch(`/${endpoint}/${led}`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            blinkStates[led] = data.blinking;
+            const btn = document.getElementById(`blink-${led.replace('_', '-')}`);
+            if (data.blinking) {
+                btn.classList.add('blinking');
+                btn.innerHTML = '<span>⏹️</span> Stop Blink';
+            } else {
+                btn.classList.remove('blinking');
+                const color = led.split('_')[1].toUpperCase();
+                btn.innerHTML = `<span>✨</span> Blink ${color === 'R' ? 'Red' : color === 'G' ? 'Green' : 'Blue'}`;
+            }
+            updateStatus(`${led.toUpperCase()} blink: ${data.blinking ? 'STARTED' : 'STOPPED'}`);
+        }
+    } catch (error) {
+        console.error('Error toggling blink:', error);
+        updateStatus('Error: Could not toggle blink');
     }
 }
 ```
@@ -627,7 +749,7 @@ Try extending this project:
 
 ## Conclusion
 
-The Arduino Uno R4's dual-core architecture unlocks powerful possibilities. By combining the MPU's Linux capabilities with the MCU's real-time control, you can build sophisticated IoT applications with simple, elegant code.
+The Arduino Uno Q's dual-core architecture unlocks powerful possibilities. By combining the MPU's Linux capabilities with the MCU's real-time control, you can build sophisticated IoT applications with simple, elegant code.
 
 The Bridge makes inter-core communication feel natural - just call functions! No need to worry about sockets, protocols, or synchronization.
 
@@ -637,7 +759,7 @@ This LED controller is just the beginning. What will you build next?
 
 ## Resources
 
-- [Arduino Uno R4 WiFi Documentation](https://docs.arduino.cc/hardware/uno-q/)
+- [Arduino Uno Q Documentation](https://docs.arduino.cc/hardware/uno-q/)
 - [Arduino App Bricks Tutorial](https://docs.arduino.cc/software/app-lab/tutorials/bricks/)
 - [Arduino CLI Documentation](https://arduino.github.io/arduino-cli/)
 - [Flask Documentation](https://flask.palletsprojects.com/)

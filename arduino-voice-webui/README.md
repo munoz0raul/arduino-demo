@@ -2,9 +2,9 @@
 
 **📖 [Read the full blog post: Building a Voice-Controlled Christmas Tree with Edge Impulse](./BLOG.md)**
 
-This project demonstrates **voice-controlled Christmas tree visualization** on the Arduino Uno R4. Using Edge Impulse's audio classification model, the system recognizes voice commands and displays a corresponding colored Christmas tree on a web interface. Say "select" to open the control window, then speak a color name to light up the tree!
+This project demonstrates **voice-controlled Christmas tree visualization** on the Arduino Uno Q. Using Edge Impulse's audio classification model, the system recognizes voice commands and displays a corresponding colored Christmas tree on a web interface. Say "select" to open the control window, then speak a color name to light up the tree!
 
-This is a fully self-contained Docker environment for running **Edge Impulse audio classification** on the **Arduino Uno R4 (MPU)**.
+This is a fully self-contained Docker environment for running **Edge Impulse audio classification** on the **Arduino Uno Q (MPU)**.
 
 It includes:
 
@@ -15,7 +15,7 @@ It includes:
 - **Auto-reset timer** (10 seconds) for automatic state cleanup
 - **Python environment** with audio processing libraries
 
-This allows you to run voice recognition **directly on the Arduino Uno R4's Linux core (MPU)** without external cloud services or internet connectivity.
+This allows you to run voice recognition **directly on the Arduino Uno Q's Linux core (MPU)** without external cloud services or internet connectivity.
 
 ---
 
@@ -45,7 +45,7 @@ This allows you to run voice recognition **directly on the Arduino Uno R4's Linu
 ## 📦 Requirements
 
 - Docker
-- Arduino Uno R4 with audio input capability
+- Arduino Uno Q with audio input capability
 - Microphone connected to ALSA audio device
 - Linux host (recommended for audio device access)
 
@@ -144,7 +144,7 @@ Access the interface by navigating to:
 http://<arduino-ip>:5000
 ```
 
-Replace `<arduino-ip>` with your Arduino Uno R4's IP address.
+Replace `<arduino-ip>` with your Arduino Uno Q's IP address.
 
 The interface includes:
 - Real-time status display showing the last recognized command
@@ -285,6 +285,6 @@ This project is provided as-is for educational purposes.
 ## 🤝 Credits
 
 - **Edge Impulse** - Audio classification platform
-- **Arduino** - Uno R4 WiFi hardware
+- **Arduino** - Uno Q hardware
 - **Flask** - Python web framework
-- **Foundries.io** - Linux environment for Arduino Uno R4
+- **Foundries.io** - Linux environment for Arduino Uno Q

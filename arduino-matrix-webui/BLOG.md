@@ -1,10 +1,10 @@
-# Interactive LED Matrix Drawing with Arduino Uno R4: Building a Web-Based Pixel Art Controller
+# Interactive LED Matrix Drawing with Arduino Uno Q: Building a Web-Based Pixel Art Controller
 
 ## Introduction
 
-In our [previous tutorial](../arduino-led-webui/BLOG.md), we explored the Arduino Uno R4's dual-core architecture by building a web-controlled LED system. Now, let's take it to the next level by creating an **interactive drawing interface** for the board's built-in **13×8 LED matrix display**.
+In our [previous tutorial](../arduino-led-webui/BLOG.md), we explored the Arduino Uno Q's dual-core architecture by building a web-controlled LED system. Now, let's take it to the next level by creating an **interactive drawing interface** for the board's built-in **13×8 LED matrix display**.
 
-The [Arduino Uno R4 WiFi](https://docs.arduino.cc/tutorials/uno-q/user-manual/) features a **red LED matrix** with 104 individually controllable LEDs arranged in a 13-column by 8-row grid. This opens up exciting possibilities for:
+The [Arduino Uno Q](https://docs.arduino.cc/tutorials/uno-q/user-manual/) features a **red LED matrix** with 104 individually controllable LEDs arranged in a 13-column by 8-row grid. This opens up exciting possibilities for:
 
 - **Pixel art drawing**
 - **Custom patterns and animations**
@@ -34,7 +34,7 @@ The video demonstrates:
 
 ### Physical Layout
 
-The LED matrix on the Arduino Uno R4 is a **13×8 monochrome display**:
+The LED matrix on the Arduino Uno Q is a **13×8 monochrome display**:
 
 ```
 Columns:  0  1  2  3  4  5  6  7  8  9 10 11 12
@@ -53,7 +53,7 @@ Row 7  │ ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■  ■ │
 
 ### Accessing the Matrix Hardware
 
-Unlike individual GPIO pins, the LED matrix is controlled through a **dedicated hardware interface** provided by the MCU firmware. The Arduino Uno R4 exposes two key functions:
+Unlike individual GPIO pins, the LED matrix is controlled through a **dedicated hardware interface** provided by the MCU firmware. The Arduino Uno Q exposes two key functions:
 
 ```cpp
 extern "C" void matrixBegin();              // Initialize the matrix

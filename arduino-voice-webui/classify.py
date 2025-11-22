@@ -105,32 +105,26 @@ def _hotplug_watchdog(runner_ref_fn):
 # =============================
 LED_NAMES = ("blue", "green", "red")
 
-# LED device mappings: two separate LED sets, each with their own naming scheme
+# LED device mappings: using only user LEDs to avoid conflicts
 LED_SET_1 = {
     "blue": "/sys/class/leds/blue:user/brightness",
     "green": "/sys/class/leds/green:user/brightness",
     "red": "/sys/class/leds/red:user/brightness",
 }
 
-LED_SET_2 = {
-    "blue": "/sys/class/leds/blue:bt/brightness",
-    "green": "/sys/class/leds/green:wlan/brightness",
-    "red": "/sys/class/leds/red:panic/brightness",
-}
-
 def _write_led(name: str, on: bool):
-    """Write 1/0 to both LED sets for the given color. Ignore failures (e.g., not present)."""
-    paths = [LED_SET_1.get(name), LED_SET_2.get(name)]
+    """Write 1/0 to LED_SET_1 for the given color. Ignore failures (e.g., not present)."""
+    path = LED_SET_1.get(name)
     
-    for path in paths:
-        if not path:
-            continue
-        try:
-            with open(path, 'w') as f:
-                f.write('1' if on else '0')
-        except Exception as e:
-            if DEBUG:
-                print(f"[LED] could not set {path} -> {on}: {e}")
+    if not path:
+        return
+    
+    try:
+        with open(path, 'w') as f:
+            f.write('1' if on else '0')
+    except Exception as e:
+        if DEBUG:
+            print(f"[LED] could not set {path} -> {on}: {e}")
 
 def set_leds(color: str):
     """Set device LEDs for given color. Supported: blue, green, red, yellow, purple.

@@ -1,10 +1,10 @@
-# Building a Voice-Controlled Christmas Tree with Edge Impulse on Arduino Uno R4
+# Building a Voice-Controlled Christmas Tree with Edge Impulse on Arduino Uno Q
 
 ## Introduction
 
-In our previous tutorials, we explored the Arduino Uno R4's dual-core architecture through [web-controlled LED systems](../arduino-led-webui/BLOG.md) and [interactive LED matrix drawing](../arduino-matrix-webui/BLOG.md). Now, let's venture into the world of **edge AI** by building a **voice-controlled Christmas tree** using audio classification.
+In our previous tutorials, we explored the Arduino Uno Q's dual-core architecture through [web-controlled LED systems](../arduino-led-webui/BLOG.md) and [interactive LED matrix drawing](../arduino-matrix-webui/BLOG.md). Now, let's venture into the world of **edge AI** by building a **voice-controlled Christmas tree** using audio classification.
 
-This project leverages **Edge Impulse**, a machine learning platform for embedded devices, to recognize voice commands directly on the Arduino Uno R4's Linux core (MPU). No cloud connectivity required - everything runs locally on the device!
+This project leverages **Edge Impulse**, a machine learning platform for embedded devices, to recognize voice commands directly on the Arduino Uno Q's Linux core (MPU). No cloud connectivity required - everything runs locally on the device!
 
 We'll build a festive application where you can:
 - Say **"select"** to activate the control window
@@ -38,7 +38,7 @@ Microphone → Cloud API → Response → Action
            (requires internet)
 ```
 
-With **Edge Impulse** running on the Arduino Uno R4, we process everything locally:
+With **Edge Impulse** running on the Arduino Uno Q, we process everything locally:
 
 ```
 Microphone → Arduino MPU → Audio Classification → Immediate Action
@@ -57,7 +57,7 @@ Microphone → Arduino MPU → Audio Classification → Immediate Action
 
 ## Architecture Overview
 
-Building on our [previous LED controller tutorial](../arduino-led-webui/BLOG.md), we're using the Arduino Uno R4's **MPU (Linux core)** to run the voice recognition system:
+Building on our [previous LED controller tutorial](../arduino-led-webui/BLOG.md), we're using the Arduino Uno Q's **MPU (Linux core)** to run the voice recognition system:
 
 ```
 ┌─────────────────────┐         ┌──────────────────────────┐
@@ -127,7 +127,7 @@ To build our voice command model, we followed these steps:
    - Trained on Edge Impulse's cloud infrastructure
 
 4. **Deployment**: Export the model as `.eim` (Edge Impulse Model)
-   - Optimized for Linux ARM64 (Arduino Uno R4 architecture)
+   - Optimized for Linux ARM64 (Arduino Uno Q architecture)
    - Includes runtime libraries and inference engine
    - Single executable file: `deployment.eim`
 
@@ -533,7 +533,7 @@ def update_color(cls, color: str):
 
 ### Multi-Room Voice Control
 
-Deploy multiple Arduino Uno R4 boards:
+Deploy multiple Arduino Uno Q boards:
 - Living room: "select blue" → blue ambient lighting
 - Bedroom: "select red" → warm red night light
 - Kitchen: "select green" → green task lighting
@@ -568,7 +568,7 @@ Train a new Edge Impulse model with these labels and update the Python code acco
 
 ### Inference Speed
 
-The Edge Impulse SDK achieves **~10 inferences per second** on the Arduino Uno R4:
+The Edge Impulse SDK achieves **~10 inferences per second** on the Arduino Uno Q:
 
 - **Audio window**: 1 second
 - **Inference time**: ~50ms
@@ -583,7 +583,7 @@ The `.eim` model is quite large (~50MB):
 - TensorFlow Lite runtime
 - Feature extraction pipeline
 
-Ensure sufficient storage on the Arduino Uno R4.
+Ensure sufficient storage on the Arduino Uno Q.
 
 ### Audio Latency
 
@@ -632,7 +632,7 @@ The voice-controlled Christmas tree builds on concepts from previous projects (S
 In this tutorial, we've built a complete **voice-controlled Christmas tree** system using:
 
 - **Edge Impulse** for audio classification
-- **Arduino Uno R4's MPU** for inference and web serving
+- **Arduino Uno Q's MPU** for inference and web serving
 - **Flask** with Server-Sent Events for real-time updates
 - **Threading timers** for automatic state reset
 - **CSS animations** for smooth visual transitions
@@ -644,7 +644,7 @@ This project demonstrates the power of **edge AI** - running machine learning mo
 - Accessibility tools
 - Educational demonstrations
 
-The Arduino Uno R4's Linux core (MPU) provides the perfect platform for these applications, offering the flexibility of high-level languages (Python) combined with the compactness of embedded hardware.
+The Arduino Uno Q's Linux core (MPU) provides the perfect platform for these applications, offering the flexibility of high-level languages (Python) combined with the compactness of embedded hardware.
 
 ### What's Next?
 
@@ -664,7 +664,7 @@ The possibilities are endless!
 - [Edge Impulse Documentation](https://docs.edgeimpulse.com/)
 - [Building a Web-Controlled LED System](../arduino-led-webui/BLOG.md)
 - [Interactive LED Matrix Drawing](../arduino-matrix-webui/BLOG.md)
-- [Arduino Uno R4 WiFi User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
+- [Arduino Uno Q User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
 - [Flask Documentation](https://flask.palletsprojects.com/)
 - [Server-Sent Events Specification](https://html.spec.whatwg.org/multipage/server-sent-events.html)
 

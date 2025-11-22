@@ -1,10 +1,10 @@
 # Arduino LED Toggle – Simple LED Control Demo
 
-**📖 [Read the full blog post: Building a Web-Controlled LED System with Arduino Uno R4](./BLOG.md)**
+**📖 [Read the full blog post: Building a Web-Controlled LED System with Arduino Uno Q](./BLOG.md)**
 
-This project demonstrates **basic LED control on the Arduino Uno R4**. It's a minimal example showing how to toggle the built-in LED on and off using Python-Arduino bridge communication.
+This project demonstrates **basic LED control on the Arduino Uno Q**. It's a minimal example showing how to toggle the built-in LED on and off using Python-Arduino bridge communication.
 
-This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno R4 (STM32U5)** board.
+This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno Q (STM32U5)** board.
 
 It includes:
 
@@ -30,7 +30,7 @@ This allows you to compile, flash sketches, and run Python applications **from a
   - Flashing to STM32U5 using OpenOCD
   - Interactive Python interface
 - Isolated environment with reproducible builds
-- Compatible with Uno R4 Minima and Uno R4 WiFi (same MCU)
+- Compatible with Uno Q Minima and Uno Q WiFi (same MCU)
 
 ---
 
@@ -45,7 +45,8 @@ This allows you to compile, flash sketches, and run Python applications **from a
 ## 🧱 Building the Docker Image
 
 ```sh
-docker build -t arduino-led .
+export FACTORY=<My-Factory-Name>
+docker build -t hub.foundries.io/${FACTORY}/arduino-led-webui:latest .
 ```
 
 ---
@@ -62,7 +63,7 @@ docker run -it --privileged \
     --device /dev/gpiochip1 \
     --device /dev/gpiochip2 \
     -v /var/run/arduino-router.sock:/var/run/arduino-router.sock \
-    arduino-led
+    hub.foundries.io/${FACTORY}/arduino-led-webui:latest
 ```
 
 ### Using Docker Compose
@@ -72,6 +73,8 @@ Alternatively, use docker-compose for easier management:
 ```sh
 docker compose up
 ```
+
+**Note:** Docker Compose will automatically use `hub.foundries.io/${FACTORY}/arduino-led-webui:latest` as defined in `docker-compose.yml`.
 
 The container will:
 
@@ -107,7 +110,7 @@ The Arduino sketch is extremely simple:
 - When called, toggles the LED state between ON and OFF
 - Uses LED3_R (red LED) for the toggle
 
-**Note:** The Arduino Uno R4's built-in LEDs are **active LOW**, meaning:
+**Note:** The Arduino Uno Q's built-in LEDs are **active LOW**, meaning:
 - `LOW` = LED ON
 - `HIGH` = LED OFF
 
@@ -118,70 +121,6 @@ The Python application:
 - Calls the `toggle_led` function via the Arduino Bridge
 - Tracks and displays the current LED state (ON/OFF)
 - Press 'q' + ENTER to quit
-
----
-
-## 🗂 Repository Structure
-
-```
-.
-├── Dockerfile
-├── start.sh
-├── main.py
-├── sketch.ino
-├── sketch.yaml
-├── frames.h
-├── openocd/
-│   ├── bin/openocd
-│   ├── bin/arduino-flash.sh
-│   ├── openocd_gpiod.cfg
-│   └── additional stm32 configs...
-├── arduino.asc
-├── arduino.conf
-└── arduino.list
-```
-
-### `/opt/openocd`
-
-The container includes Arduino’s custom OpenOCD bundle that supports:
-
-- linuxgpiod SWD backend
-- STM32U5 flashing
-- arduino-flash.sh wrapper script
-- Arduino’s board-specific config files
-
-This is the same mechanism used by the **Arduino IDE** and **arduino-cli**.
-
----
-
-## ⚙️ start.sh (Automatic Compiler + Flasher + Python App)
-
-The container runs this script by default:
-
-```bash
-#!/bin/bash
-set -e
-
-SKETCH_DIR="/app/sketch"
-
-echo ">>> Compiling sketch..."
-arduino-cli compile -b arduino:zephyr:unoq --output-dir "$SKETCH_DIR" "$SKETCH_DIR"
-
-echo ">>> Flashing..."
-BIN_FILE=$(ls "$SKETCH_DIR"/*.elf-zsk.bin | head -n 1)
-if [ -z "$BIN_FILE" ]; then
-    echo "ERROR: No .elf-zsk.bin found"
-    exit 1
-fi
-
-/opt/openocd/bin/arduino-flash.sh "$BIN_FILE"
-
-echo ">>> Activating virtualenv"
-source /opt/venv/bin/activate
-
-echo ">>> Running Python App..."
-python /app/main.py
-```
 
 ---
 
