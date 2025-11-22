@@ -689,14 +689,40 @@ Let's trace what happens when you click "Toggle Red LED":
 ### Build the Container
 
 ```bash
-docker build -t arduino-led-webui .
+export FACTORY=<My-Factory-Name>
+docker build -t hub.foundries.io/${FACTORY}/arduino-led-webui:latest .
 ```
 
-### Run with Docker Compose
+### Run the Container
+
+#### Using Docker Run
+
+Run the container with the necessary GPIO devices and socket mount:
+
+```bash
+docker run -it --privileged \
+    --device /dev/gpiochip0 \
+    --device /dev/gpiochip1 \
+    --device /dev/gpiochip2 \
+    -v /var/run/arduino-router.sock:/var/run/arduino-router.sock \
+    hub.foundries.io/${FACTORY}/arduino-led-webui:latest
+```
+
+#### Using Docker Compose
+
+Alternatively, use docker-compose for easier management:
 
 ```bash
 docker compose up
 ```
+
+**Note:** Docker Compose will automatically use `hub.foundries.io/${FACTORY}/arduino-led-webui:latest` as defined in `docker-compose.yml`.
+
+The container will:
+
+1. Compile the sketch in `/app/sketch`
+2. Flash it to the board using OpenOCD
+3. Run the Python Flask application on port 8000
 
 ### Access the Web Interface
 

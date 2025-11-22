@@ -217,18 +217,36 @@ The HTML creates a perfect 13×8 grid of clickable squares:
     display: grid;
     grid-template-columns: repeat(13, 1fr);  /* 13 equal columns */
     gap: 4px;
+    background: rgba(0,0,0,0.3);
+    padding: 8px;
+    border-radius: 8px;
 }
 
 .led{
     width: 32px;
     height: 32px;
     background: var(--led-off);
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
     cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.led:hover{
+    background: var(--led-hover);
+    border-color: rgba(255,255,255,0.3);
+    transform: scale(1.1);
 }
 
 .led.active{
     background: var(--led-on);
-    box-shadow: 0 0 12px var(--led-on);  /* Glow effect */
+    border-color: var(--led-on);
+    box-shadow: 0 0 12px var(--led-on), 0 0 24px rgba(0,255,136,0.4);
+}
+
+.led.active:hover{
+    transform: scale(1.15);
 }
 ```
 
@@ -265,30 +283,40 @@ When you click a square:
 
 ```javascript
 async function toggleLED(x, y) {
-    // Send request to Flask server
-    const response = await fetch('/matrix/toggle', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({x: x, y: y})
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-        // Update local state
-        matrixState[y][x] = data.state;
+    try {
+        const response = await fetch('/matrix/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({x: x, y: y})
+        });
         
-        // Update UI with smooth animation
-        updateLED(x, y, data.state);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update local state
+            matrixState[y][x] = data.state;
+            
+            // Update UI
+            updateLED(x, y, data.state);
+            
+            console.log(`LED (${x},${y}): ${data.state ? 'ON' : 'OFF'}`);
+        } else {
+            console.error('Failed to toggle LED:', data.error);
+        }
+    } catch (error) {
+        console.error('Error toggling LED:', error);
+        updateStatus('Error: ' + error.message);
     }
 }
 
 function updateLED(x, y, state) {
     const led = document.querySelector(`[data-x="${x}"][data-y="${y}"]`);
-    if (state) {
-        led.classList.add('active');  // Light up with glow
-    } else {
-        led.classList.remove('active');  // Turn off
+    if (led) {
+        if (state) {
+            led.classList.add('active');
+        } else {
+            led.classList.remove('active');
+        }
     }
 }
 ```
@@ -335,25 +363,37 @@ This allows natural access like `matrix_state[y][x]` instead of calculating indi
 ```python
 @app.route('/matrix/toggle', methods=['POST'])
 def toggle_led():
-    data = request.get_json()
-    x = int(data.get('x'))
-    y = int(data.get('y'))
-    
-    # Validate coordinates
-    if x < 0 or x >= MATRIX_COLS or y < 0 or y >= MATRIX_ROWS:
-        return jsonify({'success': False, 'error': 'Invalid coordinates'}), 400
-    
-    # Toggle state
-    matrix_state[y][x] = 1 if matrix_state[y][x] == 0 else 0
-    new_state = matrix_state[y][x]
-    
-    # Update MCU firmware via Bridge
-    Bridge.call("set_led", x, y, new_state)
-    
-    # Broadcast status update via SSE
-    WebStatus.update_status(f"LED ({x},{y}): {'ON' if new_state else 'OFF'}")
-    
-    return jsonify({'success': True, 'x': x, 'y': y, 'state': new_state})
+    """Toggle individual LED on/off"""
+    try:
+        data = request.get_json()
+        x = int(data.get('x'))
+        y = int(data.get('y'))
+        
+        if x < 0 or x >= MATRIX_COLS or y < 0 or y >= MATRIX_ROWS:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'}), 400
+        
+        # Toggle state
+        matrix_state[y][x] = 1 if matrix_state[y][x] == 0 else 0
+        new_state = matrix_state[y][x]
+        
+        # Call Arduino Bridge
+        Bridge.call("set_led", x, y, new_state)
+        
+        # Update status
+        status_msg = f"LED ({x},{y}): {'ON' if new_state else 'OFF'}"
+        WebStatus.update_status(status_msg)
+        
+        print(f"[MATRIX] Toggled LED ({x},{y}) -> {new_state}")
+        
+        return jsonify({
+            'success': True,
+            'x': x,
+            'y': y,
+            'state': new_state
+        })
+    except Exception as e:
+        print(f"[ERROR] Toggle LED: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 ```
 
 ### Clear Matrix Function
@@ -363,17 +403,196 @@ One-click to reset the entire display:
 ```python
 @app.route('/matrix/clear', methods=['POST'])
 def clear_matrix():
-    # Reset Python state
-    for y in range(MATRIX_ROWS):
-        for x in range(MATRIX_COLS):
-            matrix_state[y][x] = 0
-    
-    # Clear MCU hardware
-    Bridge.call("clear_matrix")
-    
-    WebStatus.update_status("Matrix cleared")
-    return jsonify({'success': True})
+    """Clear entire matrix"""
+    try:
+        # Clear local state
+        for y in range(MATRIX_ROWS):
+            for x in range(MATRIX_COLS):
+                matrix_state[y][x] = 0
+        
+        # Call Arduino Bridge
+        Bridge.call("clear_matrix")
+        
+        # Update status
+        WebStatus.update_status("Matrix cleared")
+        
+        print("[MATRIX] Cleared entire matrix")
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Clear matrix: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 ```
+
+---
+
+## Real-Time Status Updates with Server-Sent Events
+
+### The Status Communication Channel
+
+The application uses **Server-Sent Events (SSE)** to provide **real-time feedback** without polling. When you toggle an LED, the status bar instantly shows "LED (5,3): ON" - this happens through a persistent connection from browser to server.
+
+### Python Backend: Status Broadcasting
+
+The Flask server maintains a list of connected clients and broadcasts status updates:
+
+```python
+# Status management for Server-Sent Events
+status_connections = WeakSet()
+current_status = "Ready"
+
+class WebStatus:
+    _lock = threading.Lock()
+
+    @classmethod
+    def _broadcast(cls):
+        """Broadcast current status to all connected clients"""
+        for q in status_connections:
+            try:
+                q.put({"status": current_status})
+            except:
+                pass
+
+    @classmethod
+    def update_status(cls, status: str):
+        """Update status and broadcast to all clients"""
+        global current_status
+        with cls._lock:
+            current_status = status
+            cls._broadcast()
+```
+
+**Key features:**
+
+1. **WeakSet** - Automatically removes disconnected clients
+2. **Thread-safe** - Uses lock for concurrent access
+3. **Broadcast** - Sends to all connected browsers simultaneously
+
+### SSE Endpoint: Streaming Status
+
+The `/status` endpoint streams updates to connected browsers:
+
+```python
+@app.route('/status')
+def status_stream():
+    """Server-Sent Events endpoint for real-time status updates"""
+    def event_stream():
+        q = Queue()
+        status_connections.add(q)
+        try:
+            # Send initial status
+            yield f"data: {{\"status\": \"{current_status}\"}}\n\n"
+            
+            # Stream updates
+            while True:
+                data = q.get()
+                yield f"data: {{'status': '{data['status']}'}}\n\n"
+        except GeneratorExit:
+            status_connections.discard(q)
+    
+    return Response(event_stream(), mimetype='text/event-stream')
+```
+
+**How it works:**
+
+- Creates a `Queue` for each client
+- Sends initial status immediately
+- Continuously yields updates as they occur
+- Cleans up when client disconnects
+
+### JavaScript Client: Connecting to SSE
+
+The browser establishes the connection on page load:
+
+```javascript
+function connectSSE() {
+    const eventSource = new EventSource('/status');
+    
+    eventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            updateStatus(data.status);
+        } catch (e) {
+            console.error('SSE parse error:', e);
+        }
+    };
+    
+    eventSource.onerror = function(error) {
+        console.error('SSE error:', error);
+        eventSource.close();
+        
+        // Reconnect after 5 seconds
+        setTimeout(connectSSE, 5000);
+    };
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initGrid();
+    connectSSE();  // Establish real-time connection
+});
+```
+
+**Smart reconnection:**
+
+- Automatically reconnects if connection drops
+- 5-second delay prevents rapid reconnection attempts
+- Handles parse errors gracefully
+
+### Status Update Flow
+
+Here's how a status update propagates:
+
+```
+┌─────────────────┐
+│ User clicks LED │
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ Flask Handler   │ WebStatus.update_status("LED (5,3): ON")
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ WebStatus Class │ Broadcasts to all queues
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ SSE Endpoint    │ Yields: data: {"status": "LED (5,3): ON"}
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ EventSource     │ onmessage receives update
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ Status Bar      │ Shows "LED (5,3): ON" instantly!
+└─────────────────┘
+```
+
+### Why SSE Instead of Polling?
+
+Traditional polling (checking status every second) wastes resources:
+
+| Approach | Connection | Server Load | Latency |
+|----------|-----------|-------------|---------|
+| **Polling** | New request every 1s | High (constant requests) | 500ms average |
+| **SSE** | One persistent connection | Low (push only) | <10ms |
+
+**SSE advantages:**
+
+- ✅ **Lower latency** - Instant updates
+- ✅ **Less overhead** - No repeated HTTP handshakes
+- ✅ **Simpler code** - Browser handles reconnection
+- ✅ **Real-time feel** - Perfect synchronization
+
+### Multi-User Support
+
+SSE naturally supports multiple browsers:
+
+- Each browser gets its own `Queue`
+- All browsers see the same status updates
+- Perfect for **collaborative drawing** sessions
+- Status shows who changed what LED last
 
 ---
 
@@ -581,7 +800,7 @@ After mastering the LED matrix, explore:
 
 ## Resources
 
-- [Arduino Uno R4 User Manual (LED Matrix)](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
+- [Arduino Uno Q User Manual (LED Matrix)](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
 - [Previous Tutorial: Individual LED Control](../arduino-led-webui/BLOG.md)
 - [Arduino App Bricks Documentation](https://docs.arduino.cc/software/app-lab/tutorials/bricks/)
 

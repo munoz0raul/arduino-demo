@@ -1,8 +1,8 @@
-# Arduino LED Matrix Display Controller
+# Arduino LED Matrix Drawing Controller
 
 **📖 [Read the full blog post: Interactive LED Matrix Drawing with Arduino Uno Q](./BLOG.md)**
 
-This project provides an **interactive LED matrix display controller** for the Arduino Uno Q. Through a Python-based menu interface, you can display various images and animations on the board's built-in LED matrix, including hearts, microphones, signal indicators, and logos.
+This project provides an **interactive web-based drawing interface** for the Arduino Uno Q's built-in 13×8 LED matrix display. Click on squares in your browser to draw pixel art that appears instantly on the physical LED matrix!
 
 This is a fully self-contained Docker environment for **building and flashing Zephyr-based sketches** to the **Arduino Uno Q (STM32U5)** board.
 
@@ -21,20 +21,17 @@ This allows you to compile, flash sketches, and run Python applications **from a
 
 ## 🚀 Features
 
-- **Interactive menu-driven LED matrix control**
-- Multiple image categories:
-  - 🫀 **Hearts** (9 variations: LittleHeart, Heart1-8)
-  - 🎤 **Microphones** (4 variations: Mic1-4)
-  - 📡 **Signals** (10 variations: Sig1-10)
-  - 🎨 **Logos** (Foundries & Arduino)
-- **Built-in animations**:
-  - Signal animation (Sig1-10 sequence)
-  - Microphone animation (Mic1-4 sequence)
-- **Display control** (clear display, stop animations)
+- **Interactive web-based drawing interface**
+- **13×8 LED matrix** (104 individually controllable LEDs)
+- **Click-to-toggle** - Click any square to light up the corresponding LED
+- **Real-time synchronization** - Browser updates instantly reflect on physical hardware
+- **Clear all** - One-click to reset the entire display
+- **Coordinate tooltips** - Hover to see (x, y) position of each LED
+- **Server-Sent Events** - Real-time status updates
 - Dockerized environment with:
   - Automatic compilation with `arduino-cli`
   - Flashing to STM32U5 using OpenOCD
-  - Python-Arduino bridge communication
+  - Flask web server with Python-Arduino bridge
 - Isolated environment with reproducible builds
 - Compatible with Uno Q Minima and Uno Q WiFi (same MCU)
 
@@ -51,7 +48,8 @@ This allows you to compile, flash sketches, and run Python applications **from a
 ## 🧱 Building the Docker Image
 
 ```sh
-docker build -t arduino-matrix .
+export FACTORY=<My-Factory-Name>
+docker build -t hub.foundries.io/${FACTORY}/arduino-matrix-webui:latest .
 ```
 
 ---
@@ -68,7 +66,8 @@ docker run -it --privileged \
     --device /dev/gpiochip1 \
     --device /dev/gpiochip2 \
     -v /var/run/arduino-router.sock:/var/run/arduino-router.sock \
-    arduino-matrix
+    -p 8000:8000 \
+    hub.foundries.io/${FACTORY}/arduino-matrix-webui:latest
 ```
 
 ### Using Docker Compose
@@ -78,6 +77,8 @@ Alternatively, use docker-compose for easier management:
 ```sh
 docker compose up
 ```
+
+**Note:** Docker Compose will automatically use `hub.foundries.io/${FACTORY}/arduino-matrix-webui:latest` as defined in `docker-compose.yml`.
 
 The container will:
 
@@ -99,118 +100,65 @@ arduino-cli compile -b arduino:zephyr:unoq --output-dir /app/sketch /app/sketch
 python /app/main.py
 ```
 
-The Python app presents an interactive menu where you can select images and control animations on the LED matrix display.
+The web application will start on port 8000.
 
 ---
 
-## 🎮 Interactive Menu
+## 🌐 Using the Web Interface
 
-Once running, the Python application displays a menu with the following options:
+1. **Access the interface**: Open your browser to **http://localhost:8000** (or `http://<device-IP>:8000` from another computer on the same network)
 
-### 🫀 Hearts
-- `0` - LittleHeart
-- `1-8` - Heart1 through Heart8
+2. **Draw on the matrix**:
+   - Click any square to toggle the corresponding LED
+   - The LED on the physical board lights up instantly
+   - Click again to turn it off
 
-### 🎤 Microphones
-- `m1-m4` - Mic1 through Mic4
+3. **Clear the display**: Click the "Clear All" button to reset all LEDs
 
-### 📡 Signals
-- `s1-s10` - Sig1 through Sig10
+4. **View coordinates**: Hover over any square to see its (x, y) position
 
-### 🎨 Logos
-- `f` - Foundries Logo
-- `a` - Arduino Logo
-
-### 🎬 Animations
-- `i` - Start Signal animation (Sig1-10 sequence)
-- `s` - Stop animation
-- `mi` - Start Microphone animation (Mic1-4 sequence)
-- `ms` - Stop Microphone animation
-
-### ⚙️ Utilities
-- `z` - Zero (clear display)
-- `q` - Quit
+**Try drawing:**
+- A smiley face
+- Your initials  
+- Hearts and patterns
+- Anything you can imagine in 13×8 resolution!
 
 ---
 
 ## 🎯 How It Works
 
 The Arduino sketch (`sketch.ino`):
-- Initializes the LED matrix display
-- Registers multiple Bridge functions for each image and animation
-- Converts 8-bit frame data to 32-bit format for the LED matrix
-- Handles static image display and continuous animations
-- Responds to commands from the Python application via Arduino Bridge
+- Initializes the LED matrix hardware via `matrixBegin()`
+- Maintains a 104-byte array representing all LED states
+- Registers Bridge functions: `set_led`, `clear_matrix`, `get_matrix`
+- Converts the byte array to packed binary format (4 × uint32_t)
+- Calls `matrixWrite()` to update the physical matrix
 
 The Python application (`main.py`):
-- Provides an interactive command-line menu
-- Sends commands to the Arduino via the Bridge interface
-- Allows real-time control of the LED matrix display
-- Supports both static images and continuous animations
+- Runs a Flask web server on port 8000
+- Maintains a 2D array (13×8) of LED states
+- Handles HTTP requests from the web interface
+- Calls Arduino Bridge functions to control the hardware
+- Broadcasts status updates via Server-Sent Events (SSE)
 
----
+The web interface (`index.html`):
+- Displays a 13×8 clickable grid matching the physical matrix
+- Sends POST requests to `/matrix/toggle` when squares are clicked
+- Updates the UI with visual feedback (glowing effect for ON LEDs)
+- Shows coordinate tooltips on hover
+- Receives real-time status updates via SSE
 
-## 🗂 Repository Structure
+**Communication flow:**
+1. User clicks square (5, 3) in browser
+2. JavaScript sends `POST /matrix/toggle` with `{x:5, y:3}`
+3. Flask toggles `matrix_state[3][5]` and calls `Bridge.call("set_led", 5, 3, 1)`
+4. MCU firmware updates `matrixState[44]` (3×13+5=44)
+5. MCU calls `updateDisplay()` to convert to packed format
+6. MCU calls `matrixWrite()` to light up the physical LED
+7. Flask returns JSON success response
+8. Browser updates UI with glowing LED effect
 
-```
-.
-├── Dockerfile
-├── start.sh
-├── main.py
-├── sketch.ino
-├── sketch.yaml
-├── frames.h
-├── openocd/
-│   ├── bin/openocd
-│   ├── bin/arduino-flash.sh
-│   ├── openocd_gpiod.cfg
-│   └── additional stm32 configs...
-├── arduino.asc
-├── arduino.conf
-└── arduino.list
-```
-
-### `/opt/openocd`
-
-The container includes Arduino’s custom OpenOCD bundle that supports:
-
-- linuxgpiod SWD backend
-- STM32U5 flashing
-- arduino-flash.sh wrapper script
-- Arduino’s board-specific config files
-
-This is the same mechanism used by the **Arduino IDE** and **arduino-cli**.
-
----
-
-## ⚙️ start.sh (Automatic Compiler + Flasher + Python App)
-
-The container runs this script by default:
-
-```bash
-#!/bin/bash
-set -e
-
-SKETCH_DIR="/app/sketch"
-
-echo ">>> Compiling sketch..."
-arduino-cli compile -b arduino:zephyr:unoq --output-dir "$SKETCH_DIR" "$SKETCH_DIR"
-
-echo ">>> Flashing..."
-BIN_FILE=$(ls "$SKETCH_DIR"/*.elf-zsk.bin | head -n 1)
-if [ -z "$BIN_FILE" ]; then
-    echo "ERROR: No .elf-zsk.bin found"
-    exit 1
-fi
-
-/opt/openocd/bin/arduino-flash.sh "$BIN_FILE"
-
-echo ">>> Activating virtualenv"
-source /opt/venv/bin/activate
-
-echo ">>> Running Python App..."
-python /app/main.py
-```
+Total latency: < 30ms for complete round trip!
 
 ---
 
