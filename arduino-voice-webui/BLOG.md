@@ -155,7 +155,7 @@ runner = AudioImpulseRunner(model_file="/app/deployment.eim")
 Let's examine the `Dockerfile` to understand how we set up the Edge Impulse environment:
 
 ```dockerfile
-FROM debian:trixie
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Python and audio dependencies
@@ -197,9 +197,18 @@ ENV VENV=/opt/venv
 RUN python3 -m venv $VENV
 ENV PATH="$VENV/bin:$PATH"
 
-RUN pip install --no-cache-dir \
-    numpy watchdog pyalsaaudio edge_impulse_linux pyaudio \
-    "opencv-python>=4.5.1.48,<5" sounddevice flask six && \
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install https://github.com/arduino/app-bricks-py/releases/download/release%2F0.5.0/arduino_app_bricks-0.5.0-py3-none-any.whl && \
+    pip install --no-cache-dir \
+            numpy \
+            watchdog \
+            pyalsaaudio \
+            edge_impulse_linux \
+            pyaudio \
+            "opencv-python>=4.5.1.48,<5" \
+            sounddevice \
+            flask \
+            six && \
     rm -rf ~/.cache/pip
 ```
 
@@ -218,19 +227,34 @@ RUN pip install --no-cache-dir \
   - Serves the Christmas tree interface
   - Provides Server-Sent Events endpoint for real-time updates
 
-- **`opencv-python`**: Required by Edge Impulse SDK
+- **`opencv-python`**: Required by Edge Impulse SDK (even for audio-only models)
+
+- **`arduino_app_bricks`**: Arduino utilities (for potential MCU integration)
 
 ### Copying Application Files
 
 ```dockerfile
 WORKDIR /app
 
-COPY deployment.eim classify.py index.html \
-     arduino.png edgeimpulse.png foundries.png qualcomm.png \
-     off.png blue.png green.png purple.png red.png yellow.png \
-     start.sh /app/
+COPY deployment.eim \
+     classify.py \
+     index.html \
+     arduino.png \
+     edgeimpulse.png \
+     foundries.png \
+     qualcomm.png \
+     off.png \
+     blue.png \
+     green.png \
+     purple.png \
+     red.png \
+     yellow.png \
+     start.sh \
+     /app/
 
 RUN chmod +x /app/deployment.eim /app/start.sh
+
+CMD ["/app/start.sh"]
 ```
 
 Notice the **Christmas tree images**:
@@ -238,6 +262,8 @@ Notice the **Christmas tree images**:
 - `blue.png`, `green.png`, `purple.png`, `red.png`, `yellow.png`: Illuminated trees
 
 These are served as static assets by Flask.
+
+The `start.sh` script launches both the Edge Impulse classification and Flask server in background.
 
 ---
 
@@ -254,6 +280,12 @@ app = Flask(__name__)
 
 LABELS = {"blue", "green", "purple", "red", "yellow", "select"}
 COLOR = {"blue", "green", "purple", "red", "yellow"}
+
+# Detection thresholds and timing
+THRESH = 0.80  # Confidence threshold (80%)
+DEBOUNCE_SECONDS = 2.0  # Cooldown between detections
+SELECT_SUPPRESS_SECONDS = 10.0  # Window to say color after "select"
+SELECT_COOLDOWN_SECONDS = 5.0  # Prevent rapid "select" re-triggers
 ```
 
 ### Voice Command Labels
@@ -262,11 +294,47 @@ We define two sets:
 - **`LABELS`**: All recognized commands (5 colors + select)
 - **`COLOR`**: Only the color commands
 
-This distinction is important for the auto-reset logic - we only display colored trees for color commands.
+**The SELECT workflow:**
+1. User says **"select"** → Arms the system for 10 seconds
+2. User says a **color** → Only accepted within that 10-second window
+3. **Cooldown** → 5-second cooldown prevents accidental re-triggering of "select"
+
+This two-step approach prevents accidental color changes from background noise.
 
 ### WebStatus Class: State Management
 
 ```python
+# LED device mappings: physical LEDs on Arduino Uno Q
+LED_SET_1 = {
+    "blue": "/sys/class/leds/blue:user/brightness",
+    "green": "/sys/class/leds/green:user/brightness",
+    "red": "/sys/class/leds/red:user/brightness",
+}
+
+def set_leds(color: str):
+    """Set physical device LEDs for given color.
+    
+    Supported: blue, green, red, yellow, purple.
+    - yellow = green + red
+    - purple = blue + red
+    Any unknown/empty color turns all off.
+    """
+    mapping = {
+        'blue': {'blue'},
+        'green': {'green'},
+        'red': {'red'},
+        'yellow': {'green', 'red'},
+        'purple': {'blue', 'red'},
+    }
+    wanted = mapping.get((color or '').lower(), set())
+    for name in ("blue", "green", "red"):
+        path = LED_SET_1.get(name)
+        try:
+            with open(path, 'w') as f:
+                f.write('1' if name in wanted else '0')
+        except Exception:
+            pass  # Ignore LED errors
+
 class WebStatus:
     _last_result = None
     _lock = threading.Lock()
@@ -283,6 +351,9 @@ class WebStatus:
             
             cls._current_color = color
             
+            # Update physical LEDs
+            set_leds(color)
+            
             # Start new 10-second timer
             cls._clear_timer = threading.Timer(
                 cls._HIGHLIGHT_SECONDS, 
@@ -294,24 +365,29 @@ class WebStatus:
     def _clear_color_cb(cls):
         with cls._lock:
             cls._current_color = None
+            set_leds("")  # Turn off physical LEDs
 ```
 
 This class manages:
 - **Thread-safe state** with `threading.Lock()`
 - **Auto-reset timer** using `threading.Timer`
 - **Current color** for the Christmas tree
+- **Physical LED control** on the Arduino Uno Q board
 
 ### How the Timer Works
 
-1. User says "blue" → recognized by Edge Impulse
-2. `update_color("blue")` called
-3. Cancel any existing timer (if user said another color within 10s)
-4. Set `_current_color = "blue"`
-5. Start new `threading.Timer(10.0, _clear_color_cb)`
-6. After 10 seconds: `_clear_color_cb()` sets `_current_color = None`
-7. Web interface receives `None` via SSE → displays `off.png`
+1. User says "select" → recognized by Edge Impulse
+2. System arms for next color detection (10-second window)
+3. User says "blue" → recognized by Edge Impulse
+4. `update_color("blue")` called
+5. Cancel any existing timer (if user said another color within 10s)
+6. Set `_current_color = "blue"`
+7. Call `set_leds("blue")` → physical LEDs light up
+8. Start new `threading.Timer(10.0, _clear_color_cb)`
+9. After 10 seconds: `_clear_color_cb()` sets `_current_color = None` and turns off LEDs
+10. Web interface receives `None` via SSE → displays `off.png`
 
-### Audio Classification Loop
+### Audio Classification Loop with SELECT Logic
 
 ```python
 def main(model_path: str):
@@ -320,7 +396,16 @@ def main(model_path: str):
         print(f"Model: {model_info['project']['name']}")
         print(f"Labels: {model_info['model_parameters']['labels']}")
         
+        # Timing control
+        last_send_ts = 0.0
+        next_ready_ts = 0.0
+        select_window_until = 0.0  # Window for next color after "select"
+        select_block_until = 0.0   # Cooldown to block repeated "select"
+        select_pending = False     # Flag armed by "select"
+        
         for res, audio in runner.classifier(freq=16000):
+            now = time.time()
+            
             if "classification" in res["result"]:
                 predictions = res["result"]["classification"]
                 
@@ -332,40 +417,83 @@ def main(model_path: str):
                         top_score = score
                         top_label = label
                 
-                # Threshold: only accept if confidence > 0.7
-                if top_score > 0.7 and top_label in LABELS:
-                    print(f"Recognized: {top_label} ({top_score:.2f})")
+                # Threshold: only accept if confidence > THRESH (0.80)
+                if top_score > THRESH and top_label in LABELS:
+                    # Check if we're in debounce period
+                    if (now - last_send_ts) < DEBOUNCE_SECONDS:
+                        continue
                     
+                    # 1) Detecting 'select' → arm flag and start window
+                    if top_label == "select":
+                        # If still under cooldown, ignore
+                        if now < select_block_until:
+                            print("select_cooldown")
+                            last_send_ts = now
+                            continue
+                        
+                        WebStatus.update_status("Select the Color:")
+                        select_pending = True
+                        select_window_until = now + SELECT_SUPPRESS_SECONDS
+                        select_block_until = now + SELECT_COOLDOWN_SECONDS
+                        print(f"SELECT ARMED (window until {select_window_until:.0f})")
+                        continue
+                    
+                    # 2) It's a COLOR — only if select_pending and within window
                     if top_label in COLOR:
-                        WebStatus.update_color(top_label)
-                    
-                    WebStatus.update_result({
-                        "label": top_label,
-                        "confidence": top_score
-                    })
+                        if select_pending and now <= select_window_until:
+                            print(f"Result: {top_label} ({top_score:.2f})")
+                            WebStatus.update_status("Say \"Select\" to start")
+                            WebStatus.update_color(top_label)  # Also sets physical LEDs
+                            
+                            # Consume the armed flag and apply debounce
+                            select_pending = False
+                            last_send_ts = now
+                            next_ready_ts = now + DEBOUNCE_SECONDS
+                            continue
+            
+            # Check for select window expiry
+            if select_pending and now > select_window_until:
+                print("select_window_expired")
+                WebStatus.update_status("Say \"Select\" to start")
+                select_pending = False
+                set_leds("")  # Turn off LEDs
 ```
 
-### Inference Flow
+### Inference Flow with Two-Step Detection
 
 1. **`runner.classifier(freq=16000)`**: Generator that yields audio + classification results
    - Samples audio continuously at 16 kHz
    - Performs inference ~10 times per second
    - Returns predictions for all 6 labels
 
-2. **Confidence Thresholding**: Only accept predictions > 0.7 (70%)
+2. **Confidence Thresholding**: Only accept predictions > THRESH (80%)
    - Reduces false positives
    - Ensures clear voice commands
 
-3. **Color Update**: If a color command is recognized:
-   - Call `update_color(label)` to start the 10-second timer
+3. **SELECT Detection**: When "select" is recognized:
+   - Set `select_pending = True` (arms the system)
+   - Start 10-second window: `select_window_until = now + 10.0`
+   - Start 5-second cooldown: `select_block_until = now + 5.0`
+   - Broadcast "Select the Color:" status
+
+4. **COLOR Detection**: When a color is recognized:
+   - **Only process if** `select_pending == True` **AND** within window
+   - Call `update_color(label)` to start the 10-second timer and set LEDs
+   - Reset `select_pending = False`
    - Broadcast result via Server-Sent Events
+
+5. **Window Expiry**: If 10 seconds pass without color detection:
+   - Reset `select_pending = False`
+   - Turn off LEDs
+   - Return to idle state
 
 ### Flask Routes
 
 ```python
 @app.route('/')
-def index():
-    return send_from_directory('/app', 'index.html')
+def home():
+    with open("index.html", "r") as f:
+        return Response(f.read(), mimetype='text/html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -375,37 +503,37 @@ def serve_static(filename):
         'favicon.ico'
     }
     if filename in allowed:
-        return send_from_directory('/app', filename)
-    return "Not found", 404
+        return send_from_directory(BASE_DIR, filename)
+    abort(404)
 
-@app.route('/events')
-def events():
-    def stream():
+@app.route('/stream')
+def stream():
+    def eventStream():
+        q = Queue()
+        status_connections.add(q)
+        # Send initial state
+        q.put({"status": current_status, "color": current_color})
+        
         while True:
-            time.sleep(0.5)
-            with WebStatus._lock:
-                color = WebStatus._current_color
-            
-            if color:
-                data = f"data: {json.dumps({'color': color})}\n\n"
-            else:
-                data = f"data: {json.dumps({'color': None})}\n\n"
-            
-            yield data
+            data = q.get()
+            if data:
+                yield f"data: {json.dumps(data)}\n\n"
     
-    return Response(stream(), mimetype='text/event-stream')
+    return Response(eventStream(), mimetype="text/event-stream")
 ```
 
 ### Server-Sent Events (SSE)
 
-The `/events` endpoint provides **real-time updates** to the web interface:
+The `/stream` endpoint provides **real-time updates** to the web interface:
 
-- **Browser connects** to `/events`
-- **Server streams** current color state every 0.5 seconds
-- **Format**: `data: {"color": "blue"}\n\n` or `data: {"color": null}\n\n`
-- **JavaScript** receives events and updates the tree image
+- **Browser connects** to `/stream`
+- **Server streams** current color state and status
+- **Format**: `data: {"status": "Say Select to start", "color": "blue"}\n\n`
+- **JavaScript** receives events and updates the tree image + status text
 
 This creates a **push-based** update mechanism - no polling required!
+
+Note the endpoint is `/stream` (not `/events` as in some earlier examples).
 
 ---
 
@@ -462,14 +590,28 @@ When a color is recognized:
 ### JavaScript: SSE Integration
 
 ```javascript
-const eventSource = new EventSource('/events');
+const eventSource = new EventSource('/stream');
 const treeImage = document.getElementById('treeImage');
 const aura = document.getElementById('aura');
+const statusTextEl = document.getElementById('statusText');
+const chipEl = document.getElementById('chip');
+const micEl = document.getElementById('mic');
 
 eventSource.onmessage = function(event) {
   const data = JSON.parse(event.data);
-  const color = data.color;
   
+  // Update status text
+  if (data.status) {
+    statusTextEl.textContent = data.status;
+    
+    // Show/hide listening indicator
+    const listening = data.status.toLowerCase().includes('select the color');
+    chipEl.style.display = listening ? 'inline-flex' : 'none';
+    micEl.classList.toggle('pulse', listening);
+  }
+  
+  // Update tree color
+  const color = data.color;
   if (color) {
     highlightColor(color);
   } else {
@@ -485,32 +627,37 @@ function highlightColor(color) {
   // Update aura color
   const colorMap = {
     'blue': '#1e90ff',
-    'green': '#32cd32',
-    'purple': '#9370db',
-    'red': '#ff4444',
-    'yellow': '#ffd700'
+    'green': '#2dd4bf',
+    'purple': '#9b7bff',
+    'red': '#ff5c6c',
+    'yellow': '#ffd166'
   };
-  aura.style.setProperty('--aura-color', colorMap[color] || '#fff');
-  aura.classList.add('active');
+  const c = colorMap[color] || '#7cc7ff';
+  aura.style.background = `radial-gradient(520px 280px at 50% 40%, ${c}33 0%, transparent 55%)`;
+  aura.style.opacity = '.35';
 }
 
 function clearTree() {
   treeImage.src = 'off.png';
   treeImage.classList.remove('active');
-  aura.classList.remove('active');
+  aura.style.opacity = '.22';
 }
 ```
 
 ### Real-Time Update Flow
 
-1. **SSE connection** established to `/events`
-2. **Server sends** `{"color": "blue"}` when voice command recognized
-3. **JavaScript** calls `highlightColor("blue")`
-4. **Tree image** changes to `blue.png` with animation
-5. **Aura** glows blue
-6. **After 10 seconds**, server sends `{"color": null}`
-7. **JavaScript** calls `clearTree()`
-8. **Tree returns** to `off.png` with fade-out animation
+1. **SSE connection** established to `/stream`
+2. **Server sends** `{"status": "Select the Color:", "color": "blue"}` when voice command recognized
+3. **JavaScript** updates status text to "Select the Color:"
+4. **JavaScript** shows wave animation (listening indicator)
+5. **JavaScript** calls `highlightColor("blue")`
+6. **Tree image** changes to `blue.png` with animation
+7. **Aura** glows blue
+8. **Physical LEDs** on the board light up blue
+9. **After 10 seconds**, server sends `{"status": "Say Select to start", "color": ""}`
+10. **JavaScript** calls `clearTree()`
+11. **Tree returns** to `off.png` with fade-out animation
+12. **Physical LEDs** turn off
 
 ---
 
@@ -571,44 +718,68 @@ Train a new Edge Impulse model with these labels and update the Python code acco
 The Edge Impulse SDK achieves **~10 inferences per second** on the Arduino Uno Q:
 
 - **Audio window**: 1 second
-- **Inference time**: ~50ms
+- **Inference time**: ~50-100ms
 - **Overhead**: Audio buffering, feature extraction
 
 This is fast enough for real-time voice control!
 
+**Two-Step Workflow Latency:**
+1. Say "select" → Detection (~100ms) + Window opens
+2. Say "blue" → Detection (~100ms) + LED update (~10ms) + UI update (~20ms)
+3. **Total**: ~230ms from voice to visual feedback
+
+The SELECT-then-COLOR approach adds ~100ms but significantly reduces false positives from background noise.
+
 ### Memory Usage
 
-The `.eim` model is quite large (~50MB):
-- Neural network weights
-- TensorFlow Lite runtime
-- Feature extraction pipeline
+The `.eim` model file size:
+- Neural network weights: ~20-30MB
+- TensorFlow Lite runtime: ~15MB
+- Feature extraction pipeline: ~5MB
+- **Total deployment.eim**: ~50MB
+
+Additional runtime memory:
+- Edge Impulse SDK: ~20MB
+- Flask server: ~30MB
+- Audio buffers: ~5MB
+- **Total container memory**: ~200-250MB
 
 Ensure sufficient storage on the Arduino Uno Q.
 
 ### Audio Latency
 
-Total latency from speech to tree update:
+Total latency from speech to tree update (including physical LED):
 
 ```
 Speech → Audio capture (50ms)
       → Feature extraction (20ms)
-      → Neural network inference (50ms)
-      → Python processing (10ms)
+      → Neural network inference (100ms)
+      → Python processing + LED control (20ms)
       → SSE broadcast (10ms)
       → Browser update (20ms)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Total: ~160ms (barely noticeable!)
+Total: ~220ms (sub-second response!)
 ```
+
+**SELECT workflow adds:**
+- First detection: ~220ms (SELECT command)
+- Window opens: 10-second listening period
+- Second detection: ~220ms (COLOR command)
+- **Total interaction time**: ~440ms + user speaking time
 
 ### Timer Precision
 
-The 10-second auto-reset uses `threading.Timer`:
+The SELECT workflow uses `threading.Timer` for time windows:
 
 ```python
-threading.Timer(10.0, callback)
+# 10-second listening window after SELECT
+threading.Timer(SELECT_SUPPRESS_SECONDS, self._clear_color_cb)
+
+# 5-second cooldown after color expires
+threading.Timer(SELECT_COOLDOWN_SECONDS, self._select_cooldown_cb)
 ```
 
-This is **not real-time precise** - expect variations of ±100ms. For most use cases, this is acceptable.
+This is **not real-time precise** - expect variations of ±50-100ms. For voice control, this is perfectly acceptable since human reaction time is ~200ms.
 
 ---
 
@@ -616,14 +787,62 @@ This is **not real-time precise** - expect variations of ±100ms. For most use c
 
 | Feature | LED Controller | LED Matrix | Voice Christmas Tree |
 |---------|---------------|------------|---------------------|
-| **Input Method** | Web buttons | Web canvas (click to draw) | Voice commands |
-| **Output** | 6 RGB LEDs | 13×8 LED matrix | Web interface (images) |
+| **Input Method** | Web buttons | Web canvas (click to draw) | Voice commands (SELECT + COLOR) |
+| **Output** | 6 RGB LEDs | 13×8 LED matrix | Web UI + Physical LEDs (3) |
 | **Processing** | MPU + MCU (Bridge) | MPU + MCU (Bridge) | MPU only (Edge AI) |
 | **Real-time Updates** | SSE | SSE | SSE |
-| **Complexity** | Low | Medium | High (ML model) |
-| **Use Case** | Basic LED toggle | Pixel art display | Voice-controlled UI |
+| **Complexity** | Low | Medium | High (ML model + two-step workflow) |
+| **Use Case** | Basic LED toggle | Pixel art display | Voice-controlled UI with intentional commands |
 
-The voice-controlled Christmas tree builds on concepts from previous projects (SSE, Flask, Docker) while introducing **edge machine learning** as a new dimension.
+The voice-controlled Christmas tree builds on concepts from previous projects (SSE, Flask, Docker) while introducing **edge machine learning** and **two-step voice workflows** as new dimensions.
+
+---
+
+## Physical LED Feedback
+
+Unlike the previous projects that controlled external LEDs, this demo uses the **three built-in LEDs on the Arduino Uno Q board** for status feedback:
+
+- **Blue LED** (`/sys/class/leds/blue:user/brightness`)
+- **Green LED** (`/sys/class/leds/green:user/brightness`)
+- **Red LED** (`/sys/class/leds/red:user/brightness`)
+
+### LED Color Mapping
+
+Colors are created by combining LEDs:
+
+```python
+LED_SET_1 = {
+    "blue":   {"blue": True,  "green": False, "red": False},
+    "green":  {"blue": False, "green": True,  "red": False},
+    "purple": {"blue": True,  "green": False, "red": True},
+    "red":    {"blue": False, "green": False, "red": True},
+    "yellow": {"blue": False, "green": True,  "red": True},
+    "off":    {"blue": False, "green": False, "red": False}
+}
+```
+
+**Color combinations:**
+- **Purple** = Blue + Red
+- **Yellow** = Green + Red
+
+This provides visual feedback directly on the board, independent of the web interface.
+
+### Debugging LEDs
+
+Enable detailed LED debugging:
+
+```bash
+docker run -e DEBUG=1 ...
+```
+
+This shows LED state changes in the logs:
+
+```
+[DEBUG] Setting LEDs: blue=1 green=0 red=0
+[DEBUG] /sys/class/leds/blue:user/brightness = 1
+[DEBUG] /sys/class/leds/green:user/brightness = 0
+[DEBUG] /sys/class/leds/red:user/brightness = 0
+```
 
 ---
 

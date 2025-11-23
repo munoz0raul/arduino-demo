@@ -34,9 +34,10 @@ This allows you to run voice recognition **directly on the Arduino Uno Q's Linux
 - **Server-Sent Events (SSE)** for live status updates
 - **Edge Impulse integration** for on-device audio classification
 - Dockerized environment with:
-  - Flask web server on port 5000
+  - Flask web server on port 8000
   - Audio input via ALSA
   - Real-time classification at ~10Hz
+  - Physical LED indicators on the board
 - Isolated environment with reproducible builds
 - No internet required for inference (model runs locally)
 
@@ -68,7 +69,7 @@ Run the container with audio device access:
 ```sh
 docker run -it --rm \
     --device /dev/snd \
-    -p 5000:5000 \
+    -p 8000:8000 \
     arduino-voice-webui
 ```
 
@@ -90,9 +91,9 @@ The container will:
 
 2. Start audio classification (continuous inference at ~10Hz)
 
-3. Launch Flask web server on port 5000
+3. Launch Flask web server on port 8000
 
-4. Serve the Christmas tree interface at `http://<arduino-ip>:5000`
+4. Serve the Christmas tree interface at `http://<arduino-ip>:8000`
 
 ---
 
@@ -100,11 +101,15 @@ The container will:
 
 ### Voice Recognition Workflow
 
-1. **Listening State**: The system continuously monitors audio input
-2. **"Select" Command**: User says "select" to activate the interface
-3. **Color Recognition**: User says a color name (blue, green, purple, red, yellow)
-4. **Tree Display**: The corresponding colored Christmas tree appears on screen
-5. **Auto-Reset**: After 10 seconds of inactivity, the tree returns to the "off" state
+The system uses a **two-step process** for voice control:
+
+1. **"Select" Command**: User says "select" to activate a 10-second listening window
+2. **Color Command**: Within that window, user says a color name
+3. **Tree Display**: The corresponding colored Christmas tree appears on screen
+4. **LED Feedback**: Physical LEDs on the Arduino Uno Q light up in that color
+5. **Auto-Reset**: After 10 seconds, the tree and LEDs return to the "off" state
+
+This two-step approach prevents accidental color changes and ensures intentional control.
 
 ### Christmas Tree Interface
 
@@ -129,10 +134,20 @@ The system uses Edge Impulse's `AudioImpulseRunner` to perform real-time audio c
 - **Labels**: 6 voice commands (blue, green, purple, red, yellow, select)
 - **Model Format**: `.eim` (Edge Impulse Model) compiled for Linux
 
-When a voice command is recognized with sufficient confidence, the system:
+**Two-Step Voice Control:**
+
+1. **Say "select"** - Arms the system and opens a 10-second window
+2. **Say a color** - Within that window, triggers the tree change
+3. **Cooldown** - 5-second cooldown prevents repeated "select" detections
+4. **Window expiry** - If no color is said within 10 seconds, the system resets
+
+When a voice command is recognized with sufficient confidence (>80% by default), the system:
 1. Broadcasts the classification result via Server-Sent Events
 2. Updates the web interface to display the corresponding tree image
-3. Starts a 10-second timer to automatically reset to the "off" state
+3. Lights up physical LEDs on the Arduino Uno Q board (blue, green, red)
+   - **Yellow** = green + red LEDs
+   - **Purple** = blue + red LEDs
+4. Starts a 10-second timer to automatically reset to the "off" state
 
 ---
 
@@ -141,7 +156,7 @@ When a voice command is recognized with sufficient confidence, the system:
 Access the interface by navigating to:
 
 ```
-http://<arduino-ip>:5000
+http://<arduino-ip>:8000
 ```
 
 Replace `<arduino-ip>` with your Arduino Uno Q's IP address.
@@ -150,11 +165,40 @@ The interface includes:
 - Real-time status display showing the last recognized command
 - Animated Christmas tree that changes color based on voice input
 - Glowing aura effect synchronized with tree state
+- Audio wave animation when listening for color commands
 - Automatic refresh via Server-Sent Events
+
+**Usage:**
+1. Say **"select"** - Activates listening mode (wave animation appears)
+2. Say a **color name** (blue, green, purple, red, yellow)
+3. Watch the tree and physical LEDs change color
+4. Wait 10 seconds for automatic reset to dark tree
 
 ---
 
 ## 🎨 Customization
+
+### Changing Detection Threshold
+
+Edit `classify.py` or set environment variables:
+
+```python
+THRESH = 0.80  # Confidence threshold (0-1). Default: 0.80 (80%)
+DEBOUNCE_SECONDS = 2.0  # Cooldown between detections (seconds)
+SELECT_SUPPRESS_SECONDS = 10.0  # Window to say color after "select"
+SELECT_COOLDOWN_SECONDS = 5.0  # Prevent rapid "select" re-triggers
+```
+
+Run with custom environment variables:
+
+```sh
+docker run -it --rm \
+    --device /dev/snd \
+    -p 8000:8000 \
+    -e THRESH=0.75 \
+    -e DEBOUNCE_SECONDS=1.5 \
+    arduino-voice-webui
+```
 
 ### Changing the Auto-Reset Timer
 
@@ -174,7 +218,7 @@ class WebStatus:
 ```sh
 docker run -it --rm \
     --device /dev/snd \
-    -p 5000:5000 \
+    -p 8000:8000 \
     -v /path/to/your-model.eim:/app/deployment.eim \
     arduino-voice-webui
 ```
@@ -184,7 +228,7 @@ Or mount via the assets directory:
 ```sh
 docker run -it --rm \
     --device /dev/snd \
-    -p 5000:5000 \
+    -p 8000:8000 \
     -v /path/to/models:/var/local/assets \
     -e MODEL_NAME=your-model.eim \
     arduino-voice-webui
@@ -238,7 +282,7 @@ docker logs <container-id>
 
 You should see:
 ```
- * Running on http://0.0.0.0:5000
+ * Running on http://0.0.0.0:8000
 ```
 
 ### Classification not working
@@ -251,10 +295,30 @@ docker logs -f <container-id>
 
 Look for inference results like:
 ```
-Predictions:
-  blue: 0.95
-  green: 0.02
-  ...
+Scores (98 ms): blue:0.02   green:0.01   purple:0.00   red:0.01   select:0.95   yellow:0.00
+```
+
+### Physical LEDs not working
+
+The application controls three physical LEDs on the Arduino Uno Q:
+- Blue LED: `/sys/class/leds/blue:user/brightness`
+- Green LED: `/sys/class/leds/green:user/brightness`  
+- Red LED: `/sys/class/leds/red:user/brightness`
+
+If LEDs don't light up, check permissions:
+
+```sh
+ls -l /sys/class/leds/*/brightness
+```
+
+Set `DEBUG=1` environment variable to see LED control errors:
+
+```sh
+docker run -it --rm \
+    --device /dev/snd \
+    -p 8000:8000 \
+    -e DEBUG=1 \
+    arduino-voice-webui
 ```
 
 ---
@@ -262,7 +326,7 @@ Predictions:
 ## 📚 Learn More
 
 - [Edge Impulse Documentation](https://docs.edgeimpulse.com/)
-- [Arduino Uno R4 WiFi User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
+- [Arduino Uno Q User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
 - [Building a Web-Controlled LED System](../arduino-led-webui/BLOG.md) - Introduction to MPU-MCU architecture
 - [Interactive LED Matrix Drawing](../arduino-matrix-webui/BLOG.md) - Web-based LED matrix control
 
