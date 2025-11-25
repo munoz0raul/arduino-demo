@@ -42,16 +42,17 @@ RUN pip install --upgrade pip setuptools wheel && \
     rm -rf ~/.cache/pip
 
 RUN mkdir -p /app/
-COPY model.eim \
-     main.py \
+COPY main.py \
      camera_server.py \
      index.html \
      start.sh \
      test_edge_impulse.py \
      /app/
 
+# Note: model.eim must be provided by the user
+# See README.md for instructions on creating your own Edge Impulse model
+
 RUN chmod +x /app/start.sh
-RUN chmod +x /app/model.eim
 RUN chmod +x /app/test_edge_impulse.py
 WORKDIR /app
 

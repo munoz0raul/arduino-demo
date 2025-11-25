@@ -37,10 +37,36 @@ This allows you to run AI-powered object detection **from any machine** without 
 - USB camera connected to `/dev/video0`
 - Access to GPIO chip devices (for board integration)
 - Linux host (recommended)
+- **Edge Impulse Model**: You must provide your own `model.eim` file (see below)
 
 ---
 
-## 🧱 Building the Docker Image
+## � Edge Impulse Model Setup
+
+This project requires an Edge Impulse object detection model. The model file is **not included** in this repository.
+
+### Creating Your Own Model
+
+1. **Create an Edge Impulse Account**: https://edgeimpulse.com/
+2. **Create a New Project** for object detection (Image data, 224x224)
+3. **Collect Image Samples**: Upload or capture images with objects to detect (e.g., "elf", "person")
+4. **Configure Processing**: Use Image block with RGB color depth
+5. **Train Your Model**: Use YOLOv5 (Pico model) - see `model.eim.example` for detailed settings
+6. **Download the Model**:
+   - Go to "Deployment" tab
+   - Select **"Linux AARCH64"** (ARM64 architecture)
+   - Download the `.eim` file
+7. **Place the Model**: 
+   - Rename it to `model.eim`
+   - Place it in the `arduino-elf-webui/` directory
+
+See `model.eim.example` for complete YOLOv5 configuration details.
+
+---
+
+## �🧱 Building the Docker Image
+
+**Important**: Place your `model.eim` file in this directory before building!
 
 ```sh
 export FACTORY=<My-Factory-Name>

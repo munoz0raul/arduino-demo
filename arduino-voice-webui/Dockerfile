@@ -44,8 +44,7 @@ RUN pip install --upgrade pip setuptools wheel && \
     rm -rf ~/.cache/pip
 
 RUN mkdir -p /app/
-COPY deployment.eim \
-     classify.py \
+COPY classify.py \
      index.html \
      off.png \
      blue.png \
@@ -56,8 +55,10 @@ COPY deployment.eim \
      start.sh \
      /app/
 
+# Note: deployment.eim must be provided by the user
+# See README.md for instructions on creating your own Edge Impulse model
+
 RUN chmod +x /app/start.sh
-RUN chmod +x /app/deployment.eim
 WORKDIR /app
 
 CMD ["/app/start.sh"]

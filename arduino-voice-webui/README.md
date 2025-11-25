@@ -49,10 +49,37 @@ This allows you to run voice recognition **directly on the Arduino Uno Q's Linux
 - Arduino Uno Q with audio input capability
 - Microphone connected to ALSA audio device
 - Linux host (recommended for audio device access)
+- **Edge Impulse Model**: You must provide your own `deployment.eim` file (see below)
 
 ---
 
-## 🧱 Building the Docker Image
+## � Edge Impulse Model Setup
+
+This project requires an Edge Impulse audio classification model. The model file is **not included** in this repository.
+
+### Creating Your Own Model
+
+1. **Create an Edge Impulse Account**: https://edgeimpulse.com/
+2. **Create a New Project** for audio classification (Time series data, audio input, 16kHz)
+3. **Collect Audio Samples**: Record samples for your voice commands (e.g., "blue", "green", "red", "yellow", "select")
+4. **Configure Processing**: Use Audio MFE (MFCC features) with appropriate parameters
+5. **Train Your Model**: Use Transfer Learning (Keyword Spotting) - see `deployment.eim.example` for detailed settings
+6. **Download the Model**:
+   - Go to "Deployment" tab
+   - Select **"Linux AARCH64"** (ARM64 architecture)
+   - Select "Unoptimized (float32)"
+   - Download the `.eim` file
+7. **Place the Model**: 
+   - Rename it to `deployment.eim`
+   - Place it in the `arduino-voice-webui/` directory
+
+See `deployment.eim.example` for complete configuration details.
+
+---
+
+## �🧱 Building the Docker Image
+
+**Important**: Place your `deployment.eim` file in this directory before building!
 
 ```sh
 docker build -t arduino-voice-webui .
