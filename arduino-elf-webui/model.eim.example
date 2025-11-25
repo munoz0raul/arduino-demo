@@ -1,0 +1,68 @@
+# Edge Impulse Model Required
+
+This project requires an Edge Impulse model file named `model.eim`.
+
+## How to Create Your Own Model
+
+1. **Create an Edge Impulse Account**: https://edgeimpulse.com/
+
+2. **Create Impulse** with these settings:
+   - **Data type**: Image Data
+   - **Image width**: 224
+   - **Image height**: 224
+   - **Resize mode**: Fit shortest axis
+
+3. **Collect Image Samples**: Upload or capture images with objects to detect (e.g., "elf", "person")
+
+4. **Configure Processing Block - Image**:
+   - **Name**: Image
+   - **Input**: Image
+   - **Color depth**: RGB
+
+5. **Configure Learning Block - YOLOv5**:
+   - **Input feature**: Image
+   - **Output features**: Your object classes (e.g., "elf", "person")
+   
+   **Training Parameters**:
+   - **Training processor**: GPU
+   - **Number of training cycles**: 100
+   - **Learning rate**: 0.001
+   - **Model size**: Pico
+   - **Use pretrained weights**: ✓ Check
+   - **Validation set size**: 20%
+   - **Profile int8 model**: ✓ Check
+   - **Batch size**: 16
+   - **Architecture type**: No attention with ReLU
+   - **Spatial Augmentation**: Low
+   - **Color space Augmentation**: Low
+   - **Early stopping start epoch**: 10
+
+6. **Train Your Model**: Click "Start training" in Edge Impulse Studio
+
+7. **Download the Model**:
+   - Go to "Deployment" tab
+   - Select **"Linux AARCH64"** (ARM64 architecture)
+   - Download the `.eim` file
+
+8. **Place the Model**: 
+   - Rename it to `model.eim`
+   - Place it in this directory (same location as this file)
+
+## Model Requirements
+
+- **Type**: Object detection (YOLOv5)
+- **Architecture**: YOLOv5 Pico
+- **Format**: `.eim` (Edge Impulse Model)
+- **Target**: Linux AARCH64 (ARM64)
+- **Input size**: 224x224 RGB
+- **Expected filename**: `model.eim`
+
+## Build Instructions
+
+After placing your `model.eim` file:
+
+```bash
+docker build -t arduino-elf-webui .
+```
+
+For more information, see the main README.md
