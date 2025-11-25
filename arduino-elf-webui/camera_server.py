@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 """
 Camera capture server - captures from server's camera and streams to clients
 """

@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 import os, sys, getopt, signal, json, time, itertools, subprocess, threading
 from contextlib import contextmanager
 from typing import Optional

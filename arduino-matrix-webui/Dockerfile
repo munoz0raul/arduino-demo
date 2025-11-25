@@ -1,15 +1,26 @@
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY arduino.asc /etc/apt/keyrings/arduino.asc
-COPY arduino.conf /etc/apt/auth.conf.d/arduino.conf
-COPY arduino.list /etc/apt/sources.list.d/arduino.list
-
-RUN chmod 644 /etc/apt/keyrings/arduino.asc && \
-    chmod 600 /etc/apt/auth.conf.d/arduino.conf
+# Download official Arduino apt configuration from Arduino GitHub
+RUN apt-get update && apt-get install -y curl ca-certificates && \
+    curl -fsSL https://raw.githubusercontent.com/arduino/arduino-deb-images/arduino/debos-recipes/overlays/arduino-unoq-releases/etc/apt/keyrings/arduino.asc \
+    -o /etc/apt/keyrings/arduino.asc && \
+    curl -fsSL https://raw.githubusercontent.com/arduino/arduino-deb-images/arduino/debos-recipes/overlays/arduino-unoq-releases/etc/apt/auth.conf.d/arduino.conf \
+    -o /etc/apt/auth.conf.d/arduino.conf && \
+    curl -fsSL https://raw.githubusercontent.com/arduino/arduino-deb-images/arduino/debos-recipes/overlays/arduino-unoq-releases/etc/apt/sources.list.d/arduino.list \
+    -o /etc/apt/sources.list.d/arduino.list && \
+    chmod 644 /etc/apt/keyrings/arduino.asc && \
+    chmod 600 /etc/apt/auth.conf.d/arduino.conf && \
+    apt-get clean
 
 RUN apt-get update && \
-    apt-get install -y apt-transport-https ca-certificates
+    apt-get install -y apt-transport-https
 
 RUN apt-get update && \
     apt-get install -y \

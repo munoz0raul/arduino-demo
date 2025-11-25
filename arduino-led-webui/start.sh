@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 set -e
 
 SKETCH_DIR="/app/sketch"

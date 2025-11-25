@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 set -euo pipefail
 
 # Paths and defaults

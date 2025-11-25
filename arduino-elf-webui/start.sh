@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
 set -euo pipefail
 
 # Paths and defaults
 ASSETS_DIR="${ASSETS_DIR:-/var/local/assets}"
-MODEL_NAME="${MODEL_NAME:-elf-on-the-shelf-linux-aarch64-v10.eim}"
+MODEL_NAME="${MODEL_NAME:-model.eim}"
 
 PY_BIN="/opt/venv/bin/python3"
 APP_PY="/app/main.py"

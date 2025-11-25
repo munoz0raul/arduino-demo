@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright (C) 2025
-# SPDX-License-Identifier: MPL-2.0
+#
+# Copyright (c) 2025 Foundries.io
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
 
 """
 Edge Impulse Object Detection Web App
