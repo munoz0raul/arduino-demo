@@ -41,7 +41,6 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install numpy watchdog pyalsaaudio flask
 
 RUN mkdir -p /app/
-COPY openocd /opt/openocd
 COPY main.py start.sh index.html /app/
 COPY sketch.yaml sketch.ino /app/sketch/
 RUN chmod +x /app/start.sh

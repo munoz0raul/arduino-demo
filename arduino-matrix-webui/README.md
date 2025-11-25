@@ -41,6 +41,7 @@ This allows you to compile, flash sketches, and run Python applications **from a
 
 - Docker
 - Access to the board's GPIO chip devices (required for SWD)
+- `/opt/openocd` directory on host (provided by Arduino Uno Q rootfs)
 - Linux host (Windows/macOS not compatible with gpiod flashing)
 
 ---

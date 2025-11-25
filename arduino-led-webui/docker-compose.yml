@@ -14,4 +14,5 @@ services:
       - "/dev/gpiochip2:/dev/gpiochip2"
     volumes:
       - /var/run/arduino-router.sock:/var/run/arduino-router.sock
+      - /opt/openocd:/opt/openocd:ro
       - /etc/localtime:/etc/localtime:ro
