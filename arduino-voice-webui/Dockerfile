@@ -47,10 +47,6 @@ RUN mkdir -p /app/
 COPY deployment.eim \
      classify.py \
      index.html \
-     arduino.png \
-     edgeimpulse.png \
-     foundries.png \
-     qualcomm.png \
      off.png \
      blue.png \
      green.png \

@@ -239,10 +239,6 @@ WORKDIR /app
 COPY deployment.eim \
      classify.py \
      index.html \
-     arduino.png \
-     edgeimpulse.png \
-     foundries.png \
-     qualcomm.png \
      off.png \
      blue.png \
      green.png \
@@ -498,7 +494,6 @@ def home():
 @app.route('/<path:filename>')
 def serve_static(filename):
     allowed = {
-        'arduino.png', 'edgeimpulse.png', 'foundries.png', 'qualcomm.png',
         'off.png', 'blue.png', 'green.png', 'purple.png', 'red.png', 'yellow.png',
         'favicon.ico'
     }
