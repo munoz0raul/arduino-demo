@@ -12,11 +12,8 @@ services:
       - "audio"
     devices:
       - "/dev/snd:/dev/snd"
-      - "/dev/gpiochip0:/dev/gpiochip0"
-      - "/dev/gpiochip1:/dev/gpiochip1"
-      - "/dev/gpiochip2:/dev/gpiochip2"
     volumes:
-      - /var/run/arduino-router.sock:/var/run/arduino-router.sock
+      - /var/local/assets:/var/local/assets
       - /etc/localtime:/etc/localtime:ro
     environment:
         THRESH: "0.70"

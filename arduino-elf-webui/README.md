@@ -1,39 +1,53 @@
 # Arduino Elf Detector – Real-time Object Detection with Edge Impulse
 
-This project demonstrates **real-time object detection on the Arduino Uno Q** using Edge Impulse AI. It runs a live camera feed with object detection inference directly on the device.
+**📖 [Read the full blog post: Building an Object Detection System with YOLOv5 on Arduino Uno Q](./BLOG.md)**
 
-This is a fully self-contained Docker environment for running Edge Impulse object detection models on the Arduino Uno Q.
+This project demonstrates **real-time object detection** on the Arduino Uno Q using Edge Impulse's YOLOv5 model. The system captures live video from a USB camera, runs AI inference to detect objects (like elves and people), and displays bounding boxes with confidence scores on a web interface.
+
+This is a fully self-contained Docker environment for running **Edge Impulse object detection** on the **Arduino Uno Q (MPU)**.
 
 It includes:
 
-- **Edge Impulse SDK** for running `.eim` models
-- **OpenCV** for camera capture and video streaming
-- **Flask web server** with real-time video feed
-- **Python environment** with all necessary dependencies
-- Support for USB cameras via `/dev/video0`
+- **Edge Impulse Linux SDK** for real-time object detection
+- **YOLOv5 model** (`model.eim`) for detecting custom objects
+- **Flask web server** with live MJPEG video streaming
+- **OpenCV** for camera capture and video processing
+- **Real-time bounding boxes** with color-coded confidence levels
+- **Python environment** with computer vision libraries
 
-This allows you to run AI-powered object detection **from any machine** without installing dependencies locally.
+This allows you to run AI-powered object detection **directly on the Arduino Uno Q's Linux core (MPU)** without external cloud services or internet connectivity.
 
 ---
 
 ## 🚀 Features
 
-- **Real-time object detection** with Edge Impulse
-- Live camera streaming with bounding boxes
-- Color-coded confidence levels (pink → orange → yellow → blue → green)
-- Automatic model detection (searches for `.eim` files)
+- **Real-time object detection** using Edge Impulse YOLOv5
+- Detected objects (customizable):
+  - **elf** - Detects Christmas elves
+  - **person** - Detects people
+- **Live video streaming** with MJPEG format
+- **Color-coded confidence levels**:
+  - 🟢 Green: 80-100% confidence
+  - 🔵 Blue: 60-80% confidence
+  - 🟡 Yellow: 40-60% confidence
+  - 🟠 Orange: 20-40% confidence
+  - 🟣 Pink: 0-20% confidence
+- **Bounding boxes** drawn around detected objects
+- **Server-Sent Events (SSE)** for real-time status updates
 - Dockerized environment with:
-  - Automatic camera initialization
   - Flask web server on port 8000
-  - Server-Sent Events for status updates
+  - USB camera access via `/dev/video0`
+  - YOLOv5 inference at ~17 FPS (~58ms per frame)
+  - Automatic camera initialization
 - Isolated environment with reproducible builds
-- Compatible with Arduino Uno Q
+- No internet required for inference (model runs locally)
 
 ---
 
 ## 📦 Requirements
 
 - Docker
+- Arduino Uno Q (or compatible Linux ARM64 device)
 - USB camera connected to `/dev/video0`
 - Access to GPIO chip devices (for board integration)
 - Linux host (recommended)
@@ -84,11 +98,7 @@ Run the container with the necessary devices:
 ```sh
 docker run -it --privileged \
     --device /dev/video0 \
-    --device /dev/gpiochip0 \
-    --device /dev/gpiochip1 \
-    --device /dev/gpiochip2 \
-    --network host \
-    -v /var/run/arduino-router.sock:/var/run/arduino-router.sock \
+    -p 8000:8000 \
     hub.foundries.io/${FACTORY}/arduino-elf-webui:latest
 ```
 
@@ -104,71 +114,87 @@ docker compose up
 
 The container will:
 
-1. **Detect the Edge Impulse model** (`.eim` file)
-2. **Start the camera** on `/dev/video0`
-3. **Launch Flask server** on port 8000
-4. **Begin object detection** with bounding boxes
+1. Load the Edge Impulse model:
+
+```sh
+/opt/venv/bin/python3 /app/main.py /app/model.eim
+```
+
+2. Initialize USB camera (`/dev/video0`)
+
+3. Start object detection (continuous inference at ~17 FPS)
+
+4. Launch Flask web server on port 8000
+
+5. Serve the video stream interface at `http://<arduino-ip>:8000`
 
 ---
 
-## 🌐 Accessing the Web Interface
+## 🌐 Web Interface
 
-Once the container is running, open your browser and navigate to:
+Access the interface by navigating to:
 
 ```
 http://<arduino-ip>:8000
 ```
 
-You'll see:
-- **Live camera feed** with real-time object detection
+Replace `<arduino-ip>` with your Arduino Uno Q's IP address.
+
+The interface includes:
+- **Live video stream** with real-time object detection
 - **Bounding boxes** around detected objects
-- **Color-coded confidence** levels
-- **Automatic detection** running at ~10 FPS
+- **Confidence scores** displayed on each detection
+- **Color-coded boxes** for easy confidence assessment
+- **Status updates** via Server-Sent Events
+- **FPS counter** showing inference performance
+
+**Detection Visualization:**
+- Green box = High confidence (80-100%)
+- Blue box = Good confidence (60-80%)
+- Yellow box = Medium confidence (40-60%)
+- Orange box = Low confidence (20-40%)
+- Pink box = Very low confidence (0-20%)
 
 ---
 
 ## 🎯 How It Works
 
-### Edge Impulse Model
+### Object Detection Workflow
 
-The application uses an Edge Impulse model (`elf-on-the-shelf-linux-aarch64-v10.eim`) trained for object detection. The model:
+The system uses **YOLOv5** for real-time object detection:
 
-- Processes camera frames at 16 kHz sampling
-- Runs inference every 10th frame (optimized for performance)
-- Outputs bounding boxes with confidence scores
-- Color-codes results based on confidence:
-  - 🟣 Pink: 0-20%
-  - 🟠 Orange: 21-40%
-  - 🟡 Yellow: 41-60%
-  - 🔵 Light Blue: 61-80%
-  - 🟢 Green: 81-100%
+1. **Camera Capture**: USB camera captures frames at 224x224 resolution
+2. **Preprocessing**: Frames are converted to RGB and resized
+3. **AI Inference**: YOLOv5 model detects objects (~58ms per frame)
+4. **Bounding Boxes**: Results are drawn on the frame with confidence scores
+5. **Video Streaming**: Processed frames are streamed via MJPEG to the browser
+6. **Real-time Updates**: SSE provides status information to the web interface
 
-### Architecture
+### Edge Impulse YOLOv5 Object Detection
 
-```
-┌─────────────────────┐
-│   Web Browser       │
-│   Live Video Feed   │
-└──────────┬──────────┘
-           │ HTTP
-           │
-┌──────────▼──────────┐
-│  Flask Server       │
-│  - Video streaming  │
-│  - SSE status       │
-└──────────┬──────────┘
-           │
-┌──────────▼──────────┐
-│ Edge Impulse SDK    │
-│ - Object detection  │
-│ - Bounding boxes    │
-└──────────┬──────────┘
-           │
-┌──────────▼──────────┐
-│  OpenCV Camera      │
-│  /dev/video0        │
-└─────────────────────┘
-```
+The system uses Edge Impulse's `ImageImpulseRunner` to perform real-time object detection:
+
+- **Input Resolution**: 224×224 RGB
+- **Model Architecture**: YOLOv5 Pico (682KB model size)
+- **Inference Time**: ~58ms per frame (float32)
+- **Frame Rate**: ~17 FPS
+- **Classes**: Custom objects (e.g., "elf", "person")
+- **Model Format**: `.eim` (Edge Impulse Model) compiled for Linux AARCH64
+
+### Detection Process:
+
+1. **Frame Capture** - Reads frame from USB camera
+2. **Preprocessing** - Converts BGR→RGB, resizes to 224×224
+3. **Inference** - YOLOv5 detects objects and returns bounding boxes
+4. **Post-processing** - Filters detections by confidence threshold
+5. **Visualization** - Draws colored bounding boxes based on confidence
+6. **Streaming** - Encodes frame as JPEG and streams to browser
+
+When an object is detected with sufficient confidence (>20% by default), the system:
+1. Draws a bounding box around the object
+2. Labels it with class name and confidence percentage
+3. Color-codes the box based on confidence level
+4. Updates the web interface via MJPEG stream
 
 ---
 
@@ -176,95 +202,145 @@ The application uses an Edge Impulse model (`elf-on-the-shelf-linux-aarch64-v10.
 
 ### Environment Variables
 
-You can customize the application behavior using environment variables in `docker-compose.yml`:
+You can customize the behavior using environment variables:
 
-- `DEBUG`: Enable debug output (`0` or `1`)
-- `MODEL_NAME`: Override default model filename
-- `ASSETS_DIR`: Custom path for model files
+- **`MODEL_NAME`**: Model filename (default: `model.eim`)
+- **`ASSETS_DIR`**: Directory for external assets (default: `/var/local/assets`)
+- **`CAMERA_DEVICE`**: Camera device path (default: `/dev/video0`)
+- **`CONFIDENCE_THRESHOLD`**: Minimum confidence for detections (default: `0.2`)
 
-### Custom Model
-
-To use a different Edge Impulse model:
-
-1. Export your model as **Linux (AARCH64)** from Edge Impulse Studio
-2. Download the `.eim` file
-3. Replace `elf-on-the-shelf-linux-aarch64-v10.eim` in the project directory
-4. Rebuild the Docker image
-
-Or mount it at runtime:
+Example:
 
 ```sh
-docker run ... \
-    -v /path/to/your/model.eim:/var/local/assets/deployment.eim \
-    hub.foundries.io/${FACTORY}/arduino-elf-webui:latest
+docker run -it --privileged \
+    --device /dev/video0 \
+    -p 8000:8000 \
+    -e CONFIDENCE_THRESHOLD=0.5 \
+    arduino-elf-webui
 ```
+
+### Model Override
+
+To use a custom model from the assets directory:
+
+```sh
+# Place your model in /var/local/assets/my-model.eim on the host
+docker run -it --privileged \
+    --device /dev/video0 \
+    -p 8000:8000 \
+    -v /var/local/assets:/var/local/assets \
+    -e MODEL_NAME=my-model.eim \
+    arduino-elf-webui
+```
+
+The startup script checks:
+1. `/var/local/assets/${MODEL_NAME}` (if mounted)
+2. `/app/${MODEL_NAME}` (default location)
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Camera Not Found
+### No Camera Detected
 
-**Issue**: `Camera not available` or black screen
+If the camera is not found:
 
-**Solutions**:
-- Check camera connection: `ls -l /dev/video*`
-- Verify camera works: `v4l2-ctl --list-devices`
-- Ensure device is mapped in docker-compose.yml
-- Try a different USB port
+```sh
+# Check if camera is connected
+ls -l /dev/video*
+
+# Test camera with v4l2
+v4l2-ctl --list-devices
+```
+
+Make sure the container has access to `/dev/video0`.
+
+### Low FPS / Slow Inference
+
+- YOLOv5 Pico model runs at ~58ms per frame (~17 FPS)
+- For faster inference, consider:
+  - Using INT8 quantization in Edge Impulse deployment
+  - Reducing input resolution (e.g., 160x160 instead of 224x224)
+  - Using a smaller model architecture
 
 ### Model Not Loading
 
-**Issue**: `No .eim model found` or detection doesn't work
-
-**Solutions**:
-- Verify `.eim` file exists in the container
-- Check file permissions: `ls -l /app/*.eim`
-- Enable debug mode: `DEBUG=1` in docker-compose.yml
-- Check logs: `docker logs <container-id>`
-
-### Slow Detection
-
-**Issue**: Low FPS or laggy video
-
-**Solutions**:
-- Detection runs every 10th frame by default (optimized)
-- Check CPU usage on the board
-- Reduce video resolution if needed
-- Ensure no other heavy processes are running
-
-### Port 8000 Already in Use
-
-**Issue**: `Address already in use`
-
-**Solutions**:
-- Stop other applications using port 8000
-- Change port in `main.py` or via command line argument
-- Check running containers: `docker ps`
+Ensure:
+1. `model.eim` file is in the correct directory
+2. Model is built for **Linux AARCH64** architecture
+3. Model file has execute permissions (`chmod +x model.eim`)
 
 ---
 
-## 📚 Files
+## � Technical Details
 
-- **main.py** - Flask application with Edge Impulse integration
-- **camera_server.py** - OpenCV camera capture module
-- **index.html** - Web interface with live video stream
-- **start.sh** - Container startup script
-- **Dockerfile** - Container image definition
-- **docker-compose.yml** - Docker Compose configuration
-- **elf-on-the-shelf-linux-aarch64-v10.eim** - Edge Impulse model
+### YOLOv5 Model Configuration
+
+From `model.eim.example`, the recommended settings:
+
+- **Image size**: 224×224 (fit shortest axis)
+- **Model**: YOLOv5 Pico (smallest variant, 682KB)
+- **Training**: 100 epochs, 0.001 learning rate, GPU
+- **Augmentation**: Low spatial and color augmentation
+- **INT8 profiling**: Enabled for potential optimization
+- **Validation split**: 20%
+- **Architecture**: No attention with ReLU
+- **Batch size**: 16
+
+### Performance Metrics
+
+On Arduino Uno Q (ARM Cortex-A53):
+- **Inference time**: ~58ms (float32)
+- **Frame rate**: ~17 FPS
+- **Model size**: 682KB (YOLOv5 Pico)
+- **Memory usage**: ~300MB Docker container
+
+### Camera Settings
+
+- **Resolution**: 640×480 (resized to 224×224 for inference)
+- **Format**: MJPEG streaming to browser
+- **Device**: `/dev/video0` (USB camera)
+- **Backend**: OpenCV VideoCapture with V4L2
 
 ---
 
-## 🎓 Learn More
+## 🎓 Learning Resources
 
 - [Edge Impulse Documentation](https://docs.edgeimpulse.com/)
-- [Arduino Uno Q User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
-- [OpenCV Camera Capture](https://docs.opencv.org/4.x/dd/d43/tutorial_py_video_display.html)
-- [Flask Documentation](https://flask.palletsprojects.com/)
+- [YOLOv5 Object Detection Guide](https://docs.edgeimpulse.com/docs/tutorials/object-detection)
+- [Arduino Uno Q Documentation](https://docs.arduino.cc/hardware/uno-r4-wifi/)
+- [OpenCV Python Tutorials](https://docs.opencv.org/master/d6/d00/tutorial_py_root.html)
 
 ---
 
-## 📝 License
+## 📄 License
 
-This project is licensed under MPL-2.0.
+This project is licensed under the BSD-3-Clause License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## 🔒 Security
+
+For security concerns, see [SECURITY.md](SECURITY.md).
+
+---
+
+## � Acknowledgments
+
+- **Edge Impulse** - For the amazing embedded ML platform
+- **Arduino** - For the Uno Q hardware and app-bricks-py library
+- **Ultralytics** - For the YOLOv5 architecture
+
+---
+
+## 📖 Related Projects
+
+- [Arduino LED Web UI](../arduino-led-webui/) - Web-controlled LED system
+- [Arduino Matrix Web UI](../arduino-matrix-webui/) - Interactive 8×8 LED matrix
+- [Arduino Voice Web UI](../arduino-voice-webui/) - Voice-controlled Christmas tree
