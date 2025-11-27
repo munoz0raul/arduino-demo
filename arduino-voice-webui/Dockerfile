@@ -7,40 +7,60 @@
 FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
+# APT Transport (UNIVERSAL)
+RUN apt-get update && apt-get install -y apt-transport-https
+
+# ALL System Dependencies Combined (UNIVERSAL)
 RUN apt-get update && \
     apt-get install -y \
-        python3-venv \
-        python3-pip \
-        build-essential \
-        vim \
-        dbus \
-        portaudio19-dev \
-        python3-pyaudio \
-        sox \
-        python3-dev \
-        alsa-utils \
+        curl \
         ca-certificates \
-        libgl1 libglx-mesa0 libglib2.0-0 \
-        curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+        alsa-utils \
+        bash \
+        build-essential \
+        ca-certificates \
+        curl \
+        dbus \
+        gcc \
+        git \
+        libasound2 \
+        libasound2-dev \
+        libgl1 \
+        libglib2.0-0 \
+        libglx-mesa0 \
+        libgomp1 \
+        libgpiod3 \
+        mosquitto-clients \
+        portaudio19-dev \
+        python3 \
+        python3-dev \
+        python3-pip \
+        python3-pyaudio \
+        python3-venv \
+        sox \
+        vim && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Python Virtual Environment (UNIVERSAL)
 ENV VENV=/opt/venv
 RUN python3 -m venv $VENV
 ENV PATH="$VENV/bin:$PATH"
 
+# ALL Python Dependencies Combined (UNIVERSAL)
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install https://github.com/arduino/app-bricks-py/releases/download/release%2F0.5.0/arduino_app_bricks-0.5.0-py3-none-any.whl && \
     pip install --no-cache-dir \
-            numpy \
-            watchdog \
-            pyalsaaudio \
-            edge_impulse_linux \
-            pyaudio \
-            "opencv-python>=4.5.1.48,<5" \
-            sounddevice \
-            flask \
-            six && \
+        cbor \
+        edge_impulse_linux \
+        flask \
+        numpy \
+        "opencv-python>=4.8.0,<5" \
+        paho-mqtt \
+        Pillow>=10.0.0 \
+        pyalsaaudio \
+        pyaudio \
+        six \
+        sounddevice \
+        watchdog && \
     rm -rf ~/.cache/pip
 
 RUN mkdir -p /app/
