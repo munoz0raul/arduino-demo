@@ -47,7 +47,7 @@ fi
 
 # Run the Flask application
 if [[ -f "$MODEL_PATH" ]]; then
-  "$PY_BIN" "$APP_PY" --model "$MODEL_PATH" --port 8000
+  "$PY_BIN" "$APP_PY" --model "$MODEL_PATH" --port 8001
 else
-  "$PY_BIN" "$APP_PY" --port 8000
+  "$PY_BIN" "$APP_PY" --port 8001
 fi
