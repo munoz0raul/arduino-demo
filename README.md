@@ -130,7 +130,27 @@ LED matrix and RGB LED controller with MQTT integration - responds to voice comm
 
 ---
 
-### 🫀 [arduino-heart](./arduino-heart)
+### � [mosquitto](./mosquitto)
+MQTT broker container for inter-service messaging in the integrated system (Part 5).
+
+**Features:**
+- Eclipse Mosquitto MQTT broker v2.x
+- Containerized deployment via FoundriesFactory
+- Port 1883 exposed for MQTT TCP connections
+- Restart policy: unless-stopped (high availability)
+- Required for arduino-elf-mqtt, arduino-voice-mqtt, and arduino-led-matrix-mqtt coordination
+
+**MQTT Broker Configuration:**
+- Listen port: 1883
+- Protocol: MQTT TCP
+- Authentication: Configured via environment variables in MQTT client containers
+- Topics namespace: `arduino/*`
+
+**Tutorial:** Part 5 - Integrated Holiday Monitoring System
+
+---
+
+### �🫀 [arduino-heart](./arduino-heart)
 Heart animation demo with event-driven beating animation (legacy project).
 
 **Features:**
@@ -183,7 +203,10 @@ Interactive LED matrix menu controller with 30+ images and animations (legacy pr
 - FoundriesFactory account with a created Factory
 - `fioup` daemon configured for automatic OTA updates
 - Git configured with Factory repository cloned
-- MQTT broker (Mosquitto) running on device (for MQTT projects)
+- USB camera at `/dev/video0` (for vision projects)
+- USB microphone (ALSA device) (for voice projects)
+
+**Note:** For MQTT projects (Part 5), deploy the `mosquitto` container first before deploying the MQTT-enabled applications.
 
 **For Local Development:**
 - Docker and Docker Compose installed
@@ -256,18 +279,25 @@ docker run -it --privileged \
 
 ### Setting Up the Integrated MQTT System (Part 5)
 
-To run all three MQTT services together:
+To run the complete integrated system with MQTT messaging:
 
-1. **Install MQTT broker on device:**
+1. **Deploy the MQTT broker container:**
 ```bash
-ssh arduino@<device-ip>
-sudo apt update
-sudo apt install -y mosquitto mosquitto-clients
-sudo systemctl enable mosquitto
-sudo systemctl start mosquitto
+git checkout remotes/arduino-demo/main -- mosquitto
+git add mosquitto
+git commit -m "Deploy Mosquitto MQTT broker"
+git push
 ```
 
-2. **Deploy all three applications:**
+2. **Enable mosquitto via Factory UI:**
+- Navigate to: `https://app.foundries.io/factories/<FACTORY-NAME>/devices/`
+- Select your device
+- Click "Update tags & apps"
+- Move **mosquitto** from Available to Enabled
+- Click "Update"
+- Wait for deployment (~1-2 minutes)
+
+3. **Deploy all three MQTT-enabled applications:**
 ```bash
 git checkout remotes/arduino-demo/main -- arduino-elf-mqtt
 git checkout remotes/arduino-demo/main -- arduino-voice-mqtt
@@ -277,9 +307,16 @@ git commit -m "Deploy integrated MQTT system"
 git push
 ```
 
-3. **Enable all via Factory UI** (move all three to Enabled)
+4. **Enable all three via Factory UI** (move arduino-elf-mqtt, arduino-voice-mqtt, and arduino-led-matrix-mqtt to Enabled)
 
-4. **Test the integration:**
+5. **Verify MQTT broker is running:**
+```bash
+ssh arduino@<device-ip>
+docker ps | grep mosquitto
+# Should show mosquitto container with port 1883 exposed
+```
+
+6. **Test the integration:**
 - Show elf to camera → Tree blinks red, LEDs flash
 - Say "select" → Animation stops, wave appears on matrix
 - Say "blue" → Tree turns blue, LEDs turn blue
@@ -334,9 +371,50 @@ These projects serve as:
 
 **MQTT Microservices (Part 5):**
 ```
-Camera → arduino-elf-mqtt → MQTT Broker ← arduino-voice-mqtt ← Microphone
-                                  ↓
-                        arduino-led-matrix-mqtt → LEDs + Matrix
+                    ┌─────────────────────────────────────┐
+                    │      Docker Containers on UNO Q     │
+                    │                                     │
+┌─────────┐         │  ┌──────────────────┐              │
+│ Camera  │────────────│ arduino-elf-mqtt │              │
+└─────────┘         │  │ (Port 8001)      │              │
+                    │  └────────┬─────────┘              │
+                    │           │ Publish                │
+                    │           ▼                        │
+                    │  ┌──────────────────┐              │
+                    │  │   mosquitto      │              │
+                    │  │   MQTT Broker    │              │
+                    │  │   (Port 1883)    │              │
+                    │  └────┬─────────┬───┘              │
+                    │       │         │                  │
+                    │       │Subscribe│                  │
+      ┌─────────┐   │  ┌────▼──────┐  │                 │
+      │Microphone│──────│arduino-   │  │                 │
+      └─────────┘   │  │voice-mqtt │  │                 │
+                    │  │(Port 8000)│  │                 │
+                    │  └───────────┘  │                 │
+                    │       │         │                 │
+                    │       │Publish  │Subscribe        │
+                    │       ▼         ▼                 │
+                    │  ┌──────────────────┐              │
+                    │  │ arduino-led-     │              │
+                    │  │ matrix-mqtt      │              │
+                    │  │ (Bridge to MCU)  │              │
+                    │  └────────┬─────────┘              │
+                    │           │                        │
+                    └───────────┼────────────────────────┘
+                                │
+                                ▼
+                    ┌──────────────────┐
+                    │ STM32U5 MCU      │
+                    │ - LED Matrix     │
+                    │ - RGB LEDs       │
+                    └──────────────────┘
+
+MQTT Topics:
+  arduino/alert/red    - Elf detection alerts
+  arduino/elf/status   - Elf detection status
+  arduino/voice/status - Voice command state
+  arduino/led/command  - LED control commands
 ```
 
 ## 📊 Performance Metrics
@@ -351,6 +429,7 @@ Camera → arduino-elf-mqtt → MQTT Broker ← arduino-voice-mqtt ← Microphon
 - End-to-end elf detection → UI alert: ~75ms
 
 **Resource Usage:**
+- mosquitto: ~10 MB RAM, <1% CPU
 - arduino-elf-mqtt: ~300 MB RAM, 60-80% CPU
 - arduino-voice-mqtt: ~250 MB RAM, 40-60% CPU
 - arduino-led-matrix-mqtt: ~150 MB RAM, 10-20% CPU
@@ -379,10 +458,27 @@ ls -l /dev/video*  # Should show /dev/video0
 arecord -l  # Should list USB microphone
 ```
 
-**MQTT connection issues:**
+**MQTT broker not running:**
 ```bash
-sudo systemctl status mosquitto
-mosquitto_pub -h 127.0.0.1 -t "test" -m "hello"
+# Check if mosquitto container is running
+docker ps | grep mosquitto
+
+# Check mosquitto logs
+docker logs mosquitto-1
+
+# Test MQTT connectivity from device
+docker exec -it mosquitto-1 mosquitto_pub -h 127.0.0.1 -t "test" -m "hello"
+```
+
+**MQTT connection issues in applications:**
+```bash
+# Check MQTT client logs
+docker logs arduino-voice-mqtt-1 | grep MQTT
+docker logs arduino-elf-mqtt-1 | grep MQTT
+docker logs arduino-led-matrix-mqtt-1 | grep MQTT
+
+# Should show: [MQTT] Connected to 127.0.0.1:1883
+# If not connected, verify mosquitto container is running first
 ```
 
 **Container not starting:**
