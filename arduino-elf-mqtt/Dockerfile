@@ -73,8 +73,8 @@ COPY main.py \
 # Note: model.eim must be provided by the user
 # See README.md for instructions on creating your own Edge Impulse model
 # To include your model in the container, uncomment the following line:
-# COPY model.eim /app/
-# RUN chmod +x /app/model.eim
+COPY model.eim /app/
+RUN chmod +x /app/model.eim
 
 RUN chmod +x /app/start.sh
 WORKDIR /app
