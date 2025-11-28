@@ -77,6 +77,11 @@ COPY classify.py \
 
 # Note: deployment.eim must be provided by the user
 # See README.md for instructions on creating your own Edge Impulse model
+#
+# To include your model in the container, uncomment the following line:
+# COPY deployment.eim /app/
+# RUN chmod +x /app/deployment.eim
+
 
 RUN chmod +x /app/start.sh
 WORKDIR /app
